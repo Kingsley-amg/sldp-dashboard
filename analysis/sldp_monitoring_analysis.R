@@ -328,7 +328,8 @@ yes     <- function(x) !is.na(x) & x == "yes"
 
 # Common steps for any form: types, IDs, metadata, training records, exact resubmissions
 clean_common <- function(df, form, name_col = NULL, note_col = NULL) {
-  if (nrow(df) == 0) return(df)
+  # Works on empty forms too (pilot start): the columns exist, so every step below runs on zero rows
+  df <- ensure_cols(df, c("_id", "_uuid", "_submission_time", "start_time", "end_time", "patient_id", "__version__"))
   df <- df |>
     mutate(
       `_id` = as.character(`_id`),
@@ -523,7 +524,9 @@ cem_needs_adr <- cem |> filter((ae_kind == "new") | hb_alert == "yes") |>
   filter(is.na(first_adr_report) | first_adr_report > visit_date + ADR_RECONCILE_DAYS)
 add_issue(cem_needs_adr, "Form 2", paste0("New event or Hb alert without a Form 3 report within ", ADR_RECONCILE_DAYS, " days"), "Critical")
 
-issue_log <- bind_rows(issues) |>
+issue_template <- tibble(form = character(), record_id = character(), patient_id = character(), facility = character(),
+                         submitted = character(), check = character(), severity = character(), value = character())
+issue_log <- bind_rows(issue_template, bind_rows(issues)) |>
   mutate(severity = factor(severity, c("Critical", "Major", "Minor"))) |>
   arrange(severity, form, facility, patient_id)
 log_msg("Data issues found: ", nrow(issue_log), " (", sum(issue_log$severity == "Critical"), " critical)")
@@ -569,7 +572,9 @@ cohort <- reg |> filter(cem_in) |>
   mutate(day0 = coalesce(sldp_date, manual_day0))
 add_issue_rows <- cohort |> filter(is.na(day0))
 add_issue(add_issue_rows, "Linkage", "Enrolled patient with no baseline date (no SLDP date and no manual baseline)", "Major")
-issue_log <- bind_rows(issues) |> mutate(severity = factor(severity, c("Critical", "Major", "Minor"))) |>
+issue_template <- tibble(form = character(), record_id = character(), patient_id = character(), facility = character(),
+                         submitted = character(), check = character(), severity = character(), value = character())
+issue_log <- bind_rows(issue_template, bind_rows(issues)) |> mutate(severity = factor(severity, c("Critical", "Major", "Minor"))) |>
   arrange(severity, form, facility, patient_id)
 
 visit_attempts <- cem |> filter(visit_type %in% VISIT_SCHEDULE$visit_type) |>
@@ -887,7 +892,7 @@ agree <- reg |> filter(!is.na(screen_status), !is.na(provider_eligibility)) |>
   mutate(calc = screen_status == "eligible", clin = provider_eligibility == "yes")
 kappa <- function(a, b) {
   tab <- table(factor(a, c(FALSE, TRUE)), factor(b, c(FALSE, TRUE))); n <- sum(tab)
-  po <- sum(diag(tab)) / n; pe <- sum(rowSums(tab) * colSums(tab)) / n^2
+  if (n == 0) return(NA_real_); po <- sum(diag(tab)) / n; pe <- sum(rowSums(tab) * colSums(tab)) / n^2
   if (pe == 1) return(NA_real_); (po - pe) / (1 - pe)
 }
 results$screening_agreement <- tibble(

@@ -186,7 +186,8 @@ n_dropped_test <- c()
 
 # Steps common to all forms: types, IDs, metadata, training records, re-uploads
 clean_common <- function(df, form, name_col = NULL, note_col = NULL) {
-  if (nrow(df) == 0) return(df)
+  # Works on empty forms too (pilot start): the columns exist, so every step below runs on zero rows
+  df <- ensure_cols(df, c("_id", "_uuid", "_submission_time", "start_time", "end_time", "patient_id", "__version__"))
   df <- df |> mutate(`_id` = as.character(`_id`), submission_time = to_dt(`_submission_time`),
                      submission_date = as.Date(submission_time), start_dt = to_dt(start_time), end_dt = to_dt(end_time),
                      duration_min = as.numeric(difftime(end_dt, start_dt, units = "mins")),
@@ -368,6 +369,8 @@ patients <- reg |> left_join(manual_day0, by = "patient_id") |> mutate(day0 = co
          hb_drop_alert = !is.na(hb_change) & -hb_change >= HB_DROP_ALERT,
          first_ae_date = pmin(first_onset, first_form2_ae, na.rm = TRUE), d28_done = coalesce(d28_done, FALSE))
 
-issue_log <- bind_rows(issues) |> mutate(severity = factor(severity, c("Critical", "Major", "Minor"))) |> arrange(severity, form, facility, patient_id)
+issue_template <- tibble(form = character(), record_id = character(), patient_id = character(), facility = character(),
+                         submitted = character(), check = character(), severity = character(), value = character())
+issue_log <- bind_rows(issue_template, bind_rows(issues)) |> mutate(severity = factor(severity, c("Critical", "Major", "Minor"))) |> arrange(severity, form, facility, patient_id)
 
 
