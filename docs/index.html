@@ -143,7 +143,7 @@ footer{max-width:1360px;margin:0 auto;padding:0 32px 32px;font-size:12.5px;color
   <div class="grid">
     <div class="card c7"><h3>Weekly registrations</h3><p class="note">Patients registered per week, split by CEM enrolment</p><div class="chart" id="chRegWeek"></div></div>
     <div class="card c5"><h3>SLDP coverage trend</h3><p class="note">Percentage of eligible patients given SLDP, by registration week</p><div class="chart" id="chCovWeek"></div></div>
-    <div class="card c12"><h3>Facility scorecard</h3><p class="note">Click a column heading to sort. Status thresholds are explained in Methods and definitions.</p><div class="twrap" id="tbScore"></div></div>
+    <div class="card c12"><h3>Facility scorecard</h3><p class="note">Every pilot facility, including sites that have not submitted yet (shown with 0). Click a column heading to sort. Status thresholds are explained in Methods and definitions.</p><div class="twrap" id="tbScore"></div></div>
   </div>
 </section>
 
@@ -368,7 +368,7 @@ function renderOverview() {
       "Observed %": pct(sum(R, "dot"), sum(R, "given")), "Enrolled": sum(R, "enrolled"),
       "Follow-up %": pct(sum(dueU.filter(r => r.status === "Completed"), "n"), sum(dueU, "n")), "Overdue": sum(U.filter(r => r.status === "Overdue"), "n"),
       "AEs": sum(S, "events"), "SAEs": sum(S, "serious"), "Critical issues": sum(Q.filter(r => r.severity === "Critical"), "n") }; })
-    .filter(r => r.Registered + r.AEs + r.Overdue + r["Critical issues"] > 0);
+    ;   // every selected facility is listed, including sites with no records yet
   const p1 = v => v == null ? "–" : v.toFixed(1);
   table("tbScore", [{ label: "Facility" }, { label: "District" }, { label: "Site" }, { label: "Registered", num: 1 }, { label: "Eligible", num: 1 },
     { label: "Coverage %", num: 1, chip: TARGETS.coverage, fmt: p1 }, { label: "Observed %", num: 1, chip: TARGETS.dot, fmt: p1 }, { label: "Enrolled", num: 1 },

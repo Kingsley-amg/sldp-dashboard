@@ -28,13 +28,25 @@ log_msg("pipeline done: ", nrow(reg), " patients, ", nrow(cem), " visits, ", nro
 
 # ---- Lookups -----------------------------------------------------------------
 wk  <- function(d) format(lubridate::floor_date(d, "week", week_start = 1), "%Y-%m-%d")
-fac_map <- bind_rows(
+# Full facility list from the Form 1 choices sheet (every pilot site, with its
+# district and CEM flag), so sites with no records yet still appear in the
+# dashboard filters. Facilities seen in the data but missing from the list are added.
+ch_val <- function(c, k) { v <- c[[k]]; if (is.list(v)) v <- v[[1]]; if (is.null(v)) NA_character_ else as.character(v) }
+form_choices <- purrr::map_dfr(raw$registration$form$choices, function(c)
+  tibble(list_name = ch_val(c, "list_name"), code = ch_val(c, "name"), label = ch_val(c, "label"),
+         district_code = ch_val(c, "district"), cem = ch_val(c, "cem")))
+district_names <- form_choices |> filter(list_name == "district") |> select(district_code = code, district = label)
+fac_form <- form_choices |> filter(list_name == "facility") |> left_join(district_names, by = "district_code") |>
+  transmute(code, label = coalesce(label, code), district = coalesce(district, "Unknown"), cem_site = cem %in% "yes")
+fac_seen <- bind_rows(
   reg |> transmute(code = facility, label = facility_lbl, district = district_lbl, cem_site),
   cem |> transmute(code = facility, label = facility_lbl, district = district_lbl, cem_site = TRUE),
   adr |> transmute(code = facility, label = facility_lbl, district = district_lbl, cem_site = NA)) |>
-  filter(!is.na(code)) |> group_by(code) |>
+  filter(!is.na(code), !code %in% fac_form$code) |> group_by(code) |>
   summarise(label = coalesce(first(na.omit(label)), first(code)), district = coalesce(first(na.omit(district)), "Unknown"),
-            cem_site = any(cem_site, na.rm = TRUE), .groups = "drop") |> arrange(district, label)
+            cem_site = any(cem_site, na.rm = TRUE), .groups = "drop")
+fac_map <- bind_rows(fac_form, fac_seen) |> arrange(district, label)
+log_msg("facility list: ", nrow(fac_form), " from the form, ", nrow(fac_seen), " extra from the data")
 fac_code <- function(x) coalesce(as.character(x), "unknown")
 
 # ---- 1. Registration cube: facility x week -----------------------------------
