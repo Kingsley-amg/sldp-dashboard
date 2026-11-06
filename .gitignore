@@ -1,0 +1,10 @@
+# Raw Kobo downloads hold names and phone numbers: never commit them
+/data/
+/outputs/
+/test/
+*.rds
+*.xlsx
+.Renviron
+.Rhistory
+.RData
+.Rproj.user/

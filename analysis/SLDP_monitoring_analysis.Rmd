@@ -1,0 +1,830 @@
+---
+title: "SLDP Pilot, Greater Accra: Data Monitoring and Analysis Report"
+subtitle: "Patient registration, cohort event monitoring and ADR/SAE reporting"
+author: "Kingsley Amegah, Data Scientist / Health Data Specialist"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: hide
+    theme: flatly
+    highlight: tango
+    self_contained: true
+params:
+  use_cache: false        # TRUE = re-use the last downloaded snapshot (no internet needed)
+  drop_test: true         # drop training records (names or notes starting with TEST)
+  pilot_start: "2026-10-01"
+  kobo_server: "https://eu.kobotoolbox.org"
+  write_excel: true       # also write the Excel workbook for the data manager
+---
+
+<!--
+=============================================================================
+ HOW TO USE THIS FILE
+ 1. Get your Kobo API token: Kobo > Account settings > Security > API key.
+ 2. Store it in your user .Renviron (never in this file):
+        usethis::edit_r_environ()
+        KOBO_TOKEN=paste_your_token_here     # save, then restart R
+ 3. Knit from RStudio (Knit button), or from the console:
+        rmarkdown::render("SLDP_monitoring_analysis.Rmd")
+    Offline re-run from the last download:
+        rmarkdown::render("SLDP_monitoring_analysis.Rmd", params = list(use_cache = TRUE))
+ 4. Outputs: this HTML report, plus outputs/<date>/ with the Excel workbook,
+    the figures as PNG and the linked analysis datasets (.rds).
+ Requires R 4.1 or later (native pipe |>).
+=============================================================================
+-->
+
+```{r setup, include = FALSE}
+# Report-wide chunk options: code is folded (readers click "Code" to see it),
+# messages and package warnings are kept out of the report body.
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 9, fig.height = 5, dpi = 120, fig.align = "center")
+options(knitr.kable.NA = "")
+```
+
+# About this report {-}
+
+This report pulls the three linked KoboToolbox forms of the single low-dose primaquine (SLDP) pilot directly from the Kobo server, cleans and validates them, links them into patient-, visit- and event-level datasets, and then presents:
+
+* **Monitoring** for programme management: enrolment, coverage, follow-up completeness, overdue visits, safety reporting timeliness and data quality, by facility.
+* **Analysis** for the programme objectives:
+
+| | Objective | Main measures |
+|---|---|---|
+| O1 | Coverage | SLDP given among eligible Pf patients; factors associated (mixed-effects logistic model) |
+| O2 | Acceptability | Non-administration and refusal reasons; directly observed therapy |
+| O3 | Screening and dosing quality | Calculated vs clinician eligibility (kappa); dose in mg/kg |
+| O4 | Safety | Adverse event incidence, Hb change Day 0 to Day 3, haemolysis signs, SAEs, time to first event |
+| O5 | CEM performance | Completeness and timeliness of Day 0 to Day 28 follow-up; retention |
+| O6 | Parasitological follow-up | Day 3 positivity; gametocyte carriage Day 0 vs Day 3 |
+| O7 | Data quality | Issue log, linkage, missingness |
+
+*Edit the objectives to match the approved protocol. Thresholds and visit windows are set in Section 1.*
+
+# Set-up
+
+## Packages
+
+```{r packages}
+# Install any missing package once, then load quietly.
+required_packages <- c(
+  "httr2", "jsonlite",                                   # Kobo API and JSON snapshots
+  "dplyr", "tidyr", "purrr", "stringr", "tibble", "forcats", "lubridate",  # wrangling
+  "ggplot2", "scales",                                   # charts
+  "knitr", "openxlsx",                                   # tables in the report, Excel output
+  "survival", "broom", "lme4"                            # models
+)
+missing_packages <- setdiff(required_packages, rownames(installed.packages()))
+if (length(missing_packages) > 0) install.packages(missing_packages, repos = "https://cloud.r-project.org")
+invisible(lapply(required_packages, function(p) suppressPackageStartupMessages(library(p, character.only = TRUE))))
+```
+
+## Configuration
+
+```{r config}
+KOBO_SERVER <- params$kobo_server
+KOBO_TOKEN  <- Sys.getenv("KOBO_TOKEN")      # read from .Renviron, never typed here
+
+# Asset UIDs of the three projects (from the project URL in Kobo)
+ASSETS <- c(registration = "a58q4HmKUXX6C28cUNVUd9",   # Form 1, v2026110601
+            cem          = "azukUtLnBWCCZRmP6bVSm8",   # Form 2, v2026110604
+            adr          = "aM6nCEVRheMGbVAKDGUT8i")   # Form 3, v2026110603
+
+USE_CACHE   <- isTRUE(params$use_cache)
+DROP_TEST   <- isTRUE(params$drop_test)
+LOCAL_TZ    <- "Africa/Accra"
+TODAY       <- as.Date(lubridate::with_tz(Sys.time(), LOCAL_TZ))
+PILOT_START <- as.Date(params$pilot_start)
+
+# Clinical and operational thresholds (keep in line with the forms and protocol)
+SLDP_TARGET_MG_PER_KG <- 0.25
+SLDP_DOSE_LOW         <- 0.15
+SLDP_DOSE_HIGH        <- 0.40
+SLDP_MAX_MG           <- 15
+HB_DROP_ALERT         <- 2      # g/dL fall from Day 0 = safety signal
+ADR_RECONCILE_DAYS    <- 2      # Hb alert / new event should have a Form 3 report within this
+ADR_REPORT_LAG_TARGET <- 2      # target days from onset to report
+MIN_INTERVIEW_MIN     <- 3
+MAX_INTERVIEW_MIN     <- 120
+
+# Scheduled visits: offset from Day 0 and grace window (days) before "overdue"
+VISIT_SCHEDULE <- tibble::tribble(
+  ~visit_type, ~offset, ~grace, ~mode,
+  "d0",  0, 1, "In person",
+  "d3",  3, 2, "In person",
+  "d7",  7, 3, "Telephone",
+  "d14", 14, 3, "Telephone",
+  "d28", 28, 5, "Telephone")
+
+RUN_LABEL <- format(TODAY, "%Y-%m-%d")
+DIR_RAW <- file.path("data", "raw"); DIR_OUT <- file.path("outputs", RUN_LABEL); DIR_FIG <- file.path(DIR_OUT, "figures")
+for (d in c(DIR_RAW, DIR_OUT, DIR_FIG)) dir.create(d, recursive = TRUE, showWarnings = FALSE)
+
+theme_set(theme_minimal(base_size = 12) +
+            theme(plot.title = element_text(face = "bold"), plot.title.position = "plot",
+                  panel.grid.minor = element_blank(), legend.position = "bottom"))
+PAL <- c("#2F5D7C", "#B4612F", "#6E8797", "#C9A227", "#4F7F5F", "#8E3B22")
+
+log_msg <- function(...) message(format(Sys.time(), "%H:%M:%S"), "  ", ...)
+`%||%`  <- function(a, b) if (is.null(a)) b else a
+
+# Helpers used throughout the report
+pct <- function(n, d) {                     # percentage, one decimal, vector-safe
+  r <- round(100 * n / d, 1); r[rep_len(is.na(d) | d <= 0, length(r))] <- NA_real_; r
+}
+ci_txt <- function(x, n) {                  # "x% (lo-hi)" with exact binomial 95% CI
+  if (is.na(n) || n == 0) return(NA_character_)
+  b <- binom.test(x, n); sprintf("%.1f%% (%.1f-%.1f)", 100 * x / n, 100 * b$conf.int[1], 100 * b$conf.int[2])
+}
+show_tab <- function(df, caption = NULL, n = Inf) {   # a report table, or a note when empty
+  if (is.null(df) || nrow(df) == 0) return(knitr::asis_output("*No records yet.*\n\n"))
+  knitr::kable(utils::head(as.data.frame(df), n), caption = caption, format.args = list(big.mark = ","))
+}
+show_plot <- function(p, file, w = 9, h = 5) {       # save a PNG copy and print in the report
+  ggsave(file.path(DIR_FIG, file), p, width = w, height = h, dpi = 150, bg = "white"); p
+}
+safe_fit <- function(expr, label) {                 # models never stop the report early in the pilot
+  tryCatch(withCallingHandlers(expr, warning = function(w) {
+    log_msg("model warning (", label, "): ", conditionMessage(w)); invokeRestart("muffleWarning") }),
+    error = function(e) { log_msg("model skipped (", label, "): ", conditionMessage(e)); NULL })
+}
+```
+
+# Data download
+
+The three projects are downloaded from the Kobo API (all pages). Each download is saved as a dated snapshot in `data/raw/`, so any report can be reproduced from exactly the same data.
+
+```{r api}
+# One authenticated GET with retries; returns parsed JSON
+kobo_request <- function(url) {
+  if (!nzchar(KOBO_TOKEN)) stop("KOBO_TOKEN is not set. Add it to your .Renviron file.")
+  request(url) |>
+    req_headers(Authorization = paste("Token", KOBO_TOKEN), Accept = "application/json") |>
+    req_retry(max_tries = 4, backoff = function(i) 2^i) |>
+    req_timeout(120) |> req_perform() |> resp_body_json(simplifyVector = FALSE)
+}
+# All submissions of one project, following the `next` page link
+kobo_pull_submissions <- function(uid, page_size = 1000) {
+  url <- sprintf("%s/api/v2/assets/%s/data.json?limit=%d", KOBO_SERVER, uid, page_size)
+  records <- list()
+  while (!is.null(url)) { page <- kobo_request(url); records <- c(records, page$results); url <- page[["next"]] }
+  records
+}
+# The form definition: survey rows and choice lists (for labels)
+kobo_pull_form <- function(uid) {
+  a <- kobo_request(sprintf("%s/api/v2/assets/%s.json", KOBO_SERVER, uid))
+  list(name = a$name, version = a$deployed_version_id, survey = a$content$survey, choices = a$content$choices)
+}
+load_all_forms <- function() {
+  out <- list()
+  for (form in names(ASSETS)) {
+    latest <- file.path(DIR_RAW, paste0(form, "_latest.json"))
+    if (USE_CACHE) {
+      if (!file.exists(latest)) stop("No cached snapshot for ", form, ". Knit once with use_cache = FALSE.")
+      out[[form]] <- jsonlite::read_json(latest, simplifyVector = FALSE)
+    } else {
+      snap <- list(pulled_at = format(Sys.time(), tz = LOCAL_TZ, usetz = TRUE),
+                   form = kobo_pull_form(ASSETS[[form]]), records = kobo_pull_submissions(ASSETS[[form]]))
+      stamp <- format(Sys.time(), "%Y%m%d_%H%M")
+      jsonlite::write_json(snap, file.path(DIR_RAW, sprintf("%s_%s.json", form, stamp)), auto_unbox = TRUE, null = "null")
+      jsonlite::write_json(snap, latest, auto_unbox = TRUE, null = "null")
+      out[[form]] <- snap
+    }
+  }
+  out
+}
+raw <- load_all_forms()
+
+# ---- Flatten JSON into tables --------------------------------------------------
+# Kobo keys carry the group path ("site/patient_id"); XLSForm names are unique,
+# so the last path segment is a safe column name. Repeats become child tables.
+short_name <- function(x) sub(".*/", "", x)
+is_repeat  <- function(v) is.list(v) && length(v) > 0 && all(vapply(v, function(e) is.list(e) && !is.null(names(e)), logical(1)))
+flatten_record <- function(rec) {
+  keep <- rec[!vapply(rec, is.list, logical(1))]
+  keep <- lapply(keep, function(v) if (is.null(v)) NA_character_ else as.character(v))
+  names(keep) <- short_name(names(keep)); tibble::as_tibble(keep)
+}
+flatten_repeat <- function(records, repeat_name) {
+  purrr::map_dfr(records, function(rec) {
+    key <- names(rec)[short_name(names(rec)) == repeat_name]
+    if (length(key) == 0 || !is_repeat(rec[[key]])) return(NULL)
+    purrr::imap_dfr(rec[[key]], function(item, i) {
+      item <- lapply(item, function(v) if (is.null(v)) NA_character_ else as.character(v))
+      names(item) <- short_name(names(item))
+      tibble::as_tibble(item) |> mutate(parent_id = as.character(rec[["_id"]]), item_no = i, .before = 1)
+    })
+  })
+}
+to_table <- function(s) if (length(s$records) == 0) tibble() else purrr::map_dfr(s$records, flatten_record)
+ensure_cols <- function(df, cols) { for (c in setdiff(cols, names(df))) df[[c]] <- NA_character_; df }
+
+reg_raw <- to_table(raw$registration); cem_raw <- to_table(raw$cem); adr_raw <- to_table(raw$adr)
+cem_meds <- flatten_repeat(raw$cem$records, "current_medicines")
+adr_meds <- flatten_repeat(raw$adr$records, "suspected_drugs")
+
+# ---- Codebook: labels and select_multiple dummies -------------------------------
+build_codebook <- function(form) {
+  q <- purrr::map_dfr(form$survey, function(r) tibble(name = r$name %||% NA_character_, type = r$type %||% NA_character_,
+                                                     list_name = r$select_from_list_name %||% NA_character_)) |>
+    filter(!is.na(name), type %in% c("select_one", "select_multiple"))
+  ch <- purrr::map_dfr(form$choices, function(c) { lab <- c$label; if (is.list(lab)) lab <- lab[[1]]
+    tibble(list_name = c$list_name, code = as.character(c$name), label = as.character(lab %||% c$name)) })
+  list(questions = q, choices = ch)
+}
+apply_codebook <- function(df, cb) {
+  for (i in seq_len(nrow(cb$questions))) {
+    v <- cb$questions$name[i]; if (!v %in% names(df)) next
+    opts <- cb$choices |> filter(list_name == cb$questions$list_name[i])
+    if (cb$questions$type[i] == "select_one") {
+      df[[paste0(v, "_lbl")]] <- opts$label[match(df[[v]], opts$code)]
+    } else for (code in opts$code) {
+      col <- paste0(v, "__", code)
+      df[[col]] <- as.integer(stringr::str_detect(coalesce(df[[v]], ""), paste0("(^|\\s)", code, "($|\\s)")))
+      df[[col]][is.na(df[[v]])] <- NA_integer_
+    }
+  }
+  df
+}
+cb_reg <- build_codebook(raw$registration$form); cb_cem <- build_codebook(raw$cem$form); cb_adr <- build_codebook(raw$adr$form)
+```
+
+Data were pulled **`r raw$registration$pulled_at %||% RUN_LABEL`**: `r nrow(reg_raw)` registration records, `r nrow(cem_raw)` CEM visit records and `r nrow(adr_raw)` ADR/SAE reports (before cleaning).
+
+# Cleaning and validation
+
+All checks write to one **issue log** (Critical = wrong data or lost linkage; Major; Minor). The data manager resolves issues in Kobo and re-knits the report.
+
+```{r cleaning}
+issues <- list()
+add_issue <- function(df, form, check, severity, value_col = NULL) {
+  if (nrow(df) == 0) return(invisible(NULL))
+  issues[[length(issues) + 1]] <<- tibble(
+    form = form, record_id = as.character(df[["_id"]]), patient_id = as.character(df[["patient_id"]] %||% NA),
+    facility = as.character(df[["facility"]] %||% NA), submitted = as.character(df[["_submission_time"]] %||% NA),
+    check = check, severity = severity,
+    value = if (!is.null(value_col)) as.character(df[[value_col]]) else NA_character_)
+}
+ID_PATTERN <- "^GA-[0-9A-F]{8}$"; EVENT_PATTERN <- "^GA-[0-9A-F]{8}-E[0-9A-F]{6}$|^AE-"
+to_num  <- function(x) suppressWarnings(as.numeric(x))
+to_date <- function(x) suppressWarnings(as.Date(substr(x, 1, 10)))
+to_dt   <- function(x) suppressWarnings(lubridate::ymd_hms(x, tz = LOCAL_TZ, quiet = TRUE))
+yes     <- function(x) !is.na(x) & x == "yes"
+n_dropped_test <- c()
+
+# Steps common to all forms: types, IDs, metadata, training records, re-uploads
+clean_common <- function(df, form, name_col = NULL, note_col = NULL) {
+  if (nrow(df) == 0) return(df)
+  df <- df |> mutate(`_id` = as.character(`_id`), submission_time = to_dt(`_submission_time`),
+                     submission_date = as.Date(submission_time), start_dt = to_dt(start_time), end_dt = to_dt(end_time),
+                     duration_min = as.numeric(difftime(end_dt, start_dt, units = "mins")),
+                     patient_id = toupper(stringr::str_squish(patient_id)), form_version = `__version__`)
+  if (DROP_TEST) {
+    t <- rep(FALSE, nrow(df))
+    if (!is.null(name_col)) t <- t | stringr::str_detect(coalesce(df[[name_col]], ""), "^TEST\\b")
+    if (!is.null(note_col)) t <- t | stringr::str_detect(coalesce(df[[note_col]], ""), "^TEST RECORD")
+    n_dropped_test[form] <<- sum(t); df <- df[!t, , drop = FALSE]
+  }
+  add_issue(df |> group_by(`_uuid`) |> filter(n() > 1) |> ungroup(), form, "Same submission uploaded more than once (kept latest)", "Minor")
+  df <- df |> arrange(desc(submission_time)) |> distinct(`_uuid`, .keep_all = TRUE)
+  add_issue(df |> filter(!is.na(patient_id), !stringr::str_detect(patient_id, ID_PATTERN)), form, "Patient ID not in GA-XXXXXXXX format", "Critical", "patient_id")
+  df
+}
+
+# ---- Form 1: registration ----
+reg <- reg_raw |>
+  ensure_cols(c("district","facility","facility_cem","registration_date","patient_name","birth_year","patient_id","phone",
+                "collector","sex","age_months","weight","test_type","rdt_result","micro_result","micro_species","density",
+                "parasite_stages","severity","pf_positive","pq_allergy","pregnant","breastfeeding_under1","severe_anaemia",
+                "haemolysis","other_exclusion","screen_status","provider_eligibility","act_type","sldp_status","no_sldp_reason",
+                "sldp_dose_mg","sldp_date","sldp_dot","with_food","counselled","sldp_refusal_specific","cem_consent",
+                "cem_enrolled","comments","start_time","end_time","_submission_time","_uuid","__version__","device_id",
+                "patient_insured","alternative_contact_phone")) |>
+  clean_common("Form 1", name_col = "patient_name", note_col = "comments") |>
+  mutate(registration_date = to_date(registration_date), sldp_date = to_date(sldp_date),
+         birth_year = to_num(birth_year), age_months = to_num(age_months), age_years = age_months / 12,
+         weight = to_num(weight), sldp_dose_mg = to_num(sldp_dose_mg),
+         sldp_given = sldp_status == "given",
+         mg_per_kg = if_else(sldp_given & weight > 0, sldp_dose_mg / weight, NA_real_),
+         cem_site = facility_cem == "yes", cem_in = yes(cem_consent) & yes(cem_enrolled),
+         age_group = cut(age_years, c(-Inf, 5, 15, 25, 45, Inf), right = FALSE, labels = c("<5", "5-14", "15-24", "25-44", "45+")),
+         reg_week = lubridate::floor_date(registration_date, "week", week_start = 1)) |>
+  apply_codebook(cb_reg)
+
+add_issue(reg |> filter(registration_date > TODAY | registration_date < PILOT_START), "Form 1", "Registration date outside pilot period or in the future", "Major", "registration_date")
+add_issue(reg |> filter(sldp_given & is.na(sldp_date)), "Form 1", "SLDP given but no SLDP date", "Critical")
+add_issue(reg |> filter(sldp_given & sldp_date < registration_date), "Form 1", "SLDP date before registration", "Major", "sldp_date")
+add_issue(reg |> filter(sldp_given & (sldp_dose_mg <= 0 | sldp_dose_mg > SLDP_MAX_MG)), "Form 1", "SLDP dose outside 0-15 mg", "Critical", "sldp_dose_mg")
+add_issue(reg |> filter(sldp_given & is.na(weight)), "Form 1", "SLDP given without a weight", "Major")
+add_issue(reg |> filter(!is.na(mg_per_kg) & (mg_per_kg < SLDP_DOSE_LOW | mg_per_kg > SLDP_DOSE_HIGH)), "Form 1", "SLDP dose outside 0.15-0.4 mg/kg", "Major", "mg_per_kg")
+add_issue(reg |> filter(sldp_given & screen_status == "not_eligible"), "Form 1", "SLDP given although screening result was 'not eligible'", "Critical", "screen_status")
+add_issue(reg |> filter(sldp_given & age_months < 12), "Form 1", "SLDP given to a child under 12 months", "Critical", "age_months")
+add_issue(reg |> filter(cem_in & is.na(phone)), "Form 1", "CEM-enrolled patient has no phone number", "Major")
+add_issue(reg |> filter(!is.na(duration_min) & (duration_min < MIN_INTERVIEW_MIN | duration_min > MAX_INTERVIEW_MIN)), "Form 1", "Interview duration implausible", "Minor", "duration_min")
+# Duplicates: same ID twice; or probably the same person under two IDs
+add_issue(reg |> group_by(patient_id) |> filter(n() > 1) |> ungroup(), "Form 1", "Patient ID registered more than once", "Critical")
+reg <- reg |> mutate(name_key = stringr::str_to_lower(stringr::str_replace_all(coalesce(patient_name, ""), "[^A-Za-z ]", "")) |>
+                       stringr::str_squish() |> stringr::str_split(" ") |> purrr::map_chr(~ paste(sort(.x), collapse = " ")))
+add_issue(reg |> filter(name_key != "") |> group_by(name_key, birth_year, sex, facility) |> filter(n_distinct(patient_id) > 1) |> ungroup(),
+          "Form 1", "Probable duplicate person (same name, birth year, sex, facility; different IDs)", "Major")
+reg <- reg |> arrange(submission_time) |> distinct(patient_id, .keep_all = TRUE)
+
+# ---- Form 2: CEM visits ----
+cem <- cem_raw |>
+  ensure_cols(c("district","facility","patient_id","registration_matches","visit_type","visit_date","contact_mode","day0_date",
+                "baseline_source","days_since_baseline","scheduled_offset","contact_success","attempt_number","contact_failure",
+                "dark_urine_d3","temperature","jaundice","fbc_status","hb","hb_alert","dark_urine","pallor_report",
+                "jaundice_report","fatigue","dizziness","fever","nausea","vomiting","rash","ae_reported","ae_kind",
+                "linked_existing_ae_id","participant_status","status_date","d3_repeat_test_done","d3_rdt_result",
+                "d3_microscopy_result","d3_microscopy_stages","assessment_completed","focal_person","phone_notes",
+                "baseline_notes","exam_notes","start_time","end_time","_submission_time","_uuid","__version__","device_id")) |>
+  clean_common("Form 2", note_col = "phone_notes") |>
+  mutate(visit_date = to_date(visit_date), day0_date = to_date(day0_date), status_date = to_date(status_date),
+         days_since_baseline = to_num(days_since_baseline), scheduled_offset = to_num(scheduled_offset),
+         timing_deviation = days_since_baseline - scheduled_offset, attempt_number = to_num(attempt_number),
+         across(c(hb, temperature), to_num), completed = assessment_completed == "yes",
+         phone_visit = visit_type %in% c("d7", "d14", "d28") | (visit_type == "unscheduled" & contact_mode == "phone"),
+         reg_matched = to_num(registration_matches) == 1) |>
+  apply_codebook(cb_cem)
+if (DROP_TEST) cem <- cem |> filter(!stringr::str_detect(coalesce(baseline_notes, ""), "^TEST RECORD"),
+                                     !stringr::str_detect(coalesce(exam_notes, ""), "^TEST RECORD"))
+add_issue(cem |> filter(!reg_matched | !patient_id %in% reg$patient_id), "Form 2", "Visit not linked to a registration (orphan visit)", "Critical")
+add_issue(cem |> filter(visit_date > TODAY), "Form 2", "Visit date in the future", "Major", "visit_date")
+add_issue(cem |> filter(!is.na(day0_date) & visit_date < day0_date), "Form 2", "Visit before baseline date", "Major", "visit_date")
+add_issue(cem |> filter(baseline_source == "manual"), "Form 2", "Baseline date entered manually (verify against treatment record)", "Minor", "day0_date")
+add_issue(cem |> filter(!is.na(timing_deviation) & abs(timing_deviation) > 7 & visit_type != "unscheduled"), "Form 2", "Visit more than 7 days from schedule", "Minor", "timing_deviation")
+add_issue(cem |> filter(!is.na(hb) & (hb < 3 | hb > 20)), "Form 2", "Haemoglobin outside 3-20 g/dL (check units)", "Major", "hb")
+add_issue(cem |> filter(completed, visit_type != "unscheduled") |> group_by(patient_id, visit_type) |> filter(n() > 1) |> ungroup(),
+          "Form 2", "More than one completed visit of the same scheduled type", "Major", "visit_type")
+cem <- cem |> left_join(reg |> select(patient_id, reg_facility = facility), by = "patient_id")
+add_issue(cem |> filter(!is.na(reg_facility) & facility != reg_facility), "Form 2", "Visit facility differs from registration facility (confirm transfer)", "Minor", "facility")
+
+# ---- Form 3: ADR / SAE ----
+adr <- adr_raw |>
+  ensure_cols(c("district","facility","report_date","patient_id","registration_matches","event_record_type","permanent_ae_id",
+                "event_onset","event_description","intensity","serious","serious_criteria","outcome","resolved_date",
+                "hospitalized","suspected_study_drugs","pv_submitted","reporter_name","start_time","end_time",
+                "_submission_time","_uuid","__version__","device_id")) |>
+  clean_common("Form 3", note_col = "event_description") |>
+  mutate(report_date = to_date(report_date), event_onset = to_date(event_onset), resolved_date = to_date(resolved_date),
+         report_lag_days = as.numeric(report_date - event_onset), is_serious = serious == "yes",
+         reg_matched = to_num(registration_matches) == 1, permanent_ae_id = toupper(stringr::str_squish(permanent_ae_id))) |>
+  apply_codebook(cb_adr)
+add_issue(adr |> filter(!reg_matched), "Form 3", "ADR patient not found in registration (reconcile)", "Major")
+add_issue(adr |> filter(!stringr::str_detect(coalesce(permanent_ae_id, ""), EVENT_PATTERN)), "Form 3", "Event ID missing or malformed", "Critical", "permanent_ae_id")
+add_issue(adr |> filter(stringr::str_detect(coalesce(permanent_ae_id, ""), "^GA-") & substr(permanent_ae_id, 1, 11) != patient_id), "Form 3", "Event ID does not start with this Patient ID", "Critical", "permanent_ae_id")
+add_issue(adr |> filter(event_record_type == "update" & !permanent_ae_id %in% adr$permanent_ae_id[adr$event_record_type == "new"]), "Form 3", "Update refers to an event with no 'new' report", "Major", "permanent_ae_id")
+add_issue(adr |> filter(is_serious & !yes(pv_submitted)), "Form 3", "Serious event not yet submitted to pharmacovigilance", "Critical")
+add_issue(adr |> filter(!is.na(report_lag_days) & report_lag_days > ADR_REPORT_LAG_TARGET), "Form 3", paste0("Reported more than ", ADR_REPORT_LAG_TARGET, " days after onset"), "Minor", "report_lag_days")
+
+# ---- Cross-form reconciliation ----
+add_issue(cem |> filter(ae_kind %in% c("ongoing", "changed") & !toupper(linked_existing_ae_id) %in% adr$permanent_ae_id), "Form 2", "Ongoing/changed event ID not found in Form 3 reports", "Major", "linked_existing_ae_id")
+first_adr <- adr |> group_by(patient_id) |> summarise(first_adr_report = min(report_date, na.rm = TRUE), .groups = "drop")
+add_issue(cem |> filter(ae_kind == "new" | hb_alert == "yes") |> left_join(first_adr, by = "patient_id") |>
+            filter(is.na(first_adr_report) | first_adr_report > visit_date + ADR_RECONCILE_DAYS),
+          "Form 2", paste0("New event or Hb alert without a Form 3 report within ", ADR_RECONCILE_DAYS, " days"), "Critical")
+```
+
+After cleaning: **`r nrow(reg)`** registered patients, **`r nrow(cem)`** CEM visits and **`r nrow(adr)`** ADR/SAE reports. Training records removed: `r sum(n_dropped_test)`.
+
+# Linkage
+
+```{r linkage}
+# ---- Event level: one row per Event ID (first report + latest update) ----
+events <- adr |> filter(!is.na(permanent_ae_id)) |> arrange(permanent_ae_id, report_date, submission_time) |>
+  group_by(event_id = permanent_ae_id) |>
+  summarise(patient_id = first(patient_id), facility = first(facility),
+            onset = suppressWarnings(min(event_onset, na.rm = TRUE)),
+            first_report = min(report_date, na.rm = TRUE), n_reports = n(), description = first(event_description),
+            max_intensity = c("mild", "moderate", "severe")[suppressWarnings(max(match(intensity, c("mild", "moderate", "severe")), na.rm = TRUE))],
+            ever_serious = any(is_serious, na.rm = TRUE), criteria = paste(unique(na.omit(serious_criteria)), collapse = " "),
+            final_outcome = last(outcome), sldp_suspected = any(stringr::str_detect(coalesce(suspected_study_drugs, ""), "sldp")),
+            act_suspected = any(stringr::str_detect(coalesce(suspected_study_drugs, ""), "\\bact\\b")),
+            hospitalised = any(hospitalized == "yes", na.rm = TRUE), pv_submitted = any(yes(pv_submitted)), .groups = "drop") |>
+  mutate(onset = if_else(is.infinite(onset), as.Date(NA), onset), report_lag = as.numeric(first_report - onset))
+
+# ---- Visit level: expected vs done for every enrolled patient ----
+manual_day0 <- cem |> filter(baseline_source == "manual", !is.na(day0_date)) |> group_by(patient_id) |>
+  summarise(manual_day0 = first(day0_date), .groups = "drop")
+cohort <- reg |> filter(cem_in) |> left_join(manual_day0, by = "patient_id") |> mutate(day0 = coalesce(sldp_date, manual_day0))
+add_issue(cohort |> filter(is.na(day0)), "Linkage", "Enrolled patient with no baseline date (no SLDP date and no manual baseline)", "Major")
+
+visit_attempts <- cem |> filter(visit_type %in% VISIT_SCHEDULE$visit_type) |> group_by(patient_id, visit_type) |>
+  summarise(n_attempts_failed = sum(!completed, na.rm = TRUE), completed = any(completed, na.rm = TRUE),
+            completed_date = suppressWarnings(min(visit_date[completed], na.rm = TRUE)), last_attempt = max(visit_date, na.rm = TRUE), .groups = "drop") |>
+  mutate(completed_date = if_else(is.infinite(completed_date), as.Date(NA), completed_date))
+exits <- cem |> filter(participant_status %in% c("withdrawn", "lost", "died")) |> group_by(patient_id) |>
+  summarise(exit_status = first(participant_status), exit_date = suppressWarnings(min(coalesce(status_date, visit_date), na.rm = TRUE)), .groups = "drop") |>
+  mutate(exit_date = if_else(is.infinite(exit_date), as.Date(NA), exit_date))
+lv <- c("Completed", "Due now", "Overdue", "Not yet due", "No baseline date", "Exited")
+visit_status <- cohort |> select(patient_id, facility, facility_lbl, district, patient_name, phone, alternative_contact_phone, day0) |>
+  tidyr::crossing(VISIT_SCHEDULE) |> mutate(due_date = day0 + offset, window_end = due_date + grace) |>
+  left_join(visit_attempts, by = c("patient_id", "visit_type")) |> left_join(exits, by = "patient_id") |>
+  mutate(completed = coalesce(completed, FALSE),
+         status = case_when(completed ~ "Completed", is.na(day0) ~ "No baseline date",
+                            !is.na(exit_date) & due_date > exit_date ~ "Exited",
+                            TODAY < due_date ~ "Not yet due", TODAY <= window_end ~ "Due now", TRUE ~ "Overdue"),
+         status = factor(status, lv), days_late_done = as.numeric(completed_date - due_date),
+         visit_type = factor(visit_type, VISIT_SCHEDULE$visit_type))
+
+# ---- Patient level ----
+hb_wide <- cem |> filter(visit_type %in% c("d0", "d3"), !is.na(hb)) |> arrange(submission_time) |>
+  group_by(patient_id, visit_type) |> summarise(hb = last(hb), .groups = "drop") |>
+  tidyr::pivot_wider(names_from = visit_type, values_from = hb, names_prefix = "hb_") |> ensure_cols(c("hb_d0", "hb_d3")) |>
+  mutate(across(c(hb_d0, hb_d3), as.numeric))
+symptom_vars <- c("dark_urine", "pallor_report", "jaundice_report", "fatigue", "dizziness", "fever", "nausea", "vomiting", "rash")
+patients <- reg |> left_join(manual_day0, by = "patient_id") |> mutate(day0 = coalesce(sldp_date, manual_day0)) |>
+  left_join(hb_wide, by = "patient_id") |>
+  left_join(cem |> group_by(patient_id) |> summarise(haemolysis_sign = any(yes(dark_urine) | yes(jaundice_report) | yes(dark_urine_d3) | yes(jaundice)),
+                                                     last_contact = suppressWarnings(max(visit_date[completed], na.rm = TRUE)),
+                                                     first_form2_ae = suppressWarnings(min(visit_date[yes(ae_reported)], na.rm = TRUE)), .groups = "drop"), by = "patient_id") |>
+  left_join(events |> group_by(patient_id) |> summarise(n_events = n(), any_serious = any(ever_serious),
+                                                        first_onset = suppressWarnings(min(onset, na.rm = TRUE)), .groups = "drop"), by = "patient_id") |>
+  left_join(visit_status |> filter(visit_type == "d28") |> select(patient_id, d28_done = completed), by = "patient_id") |>
+  left_join(exits, by = "patient_id") |>
+  mutate(across(c(last_contact, first_form2_ae, first_onset), ~ if_else(is.infinite(.x), as.Date(NA), .x)),
+         n_events = coalesce(n_events, 0L), any_event = n_events > 0 | !is.na(first_form2_ae),
+         any_serious = coalesce(any_serious, FALSE), hb_change = hb_d3 - hb_d0,
+         hb_drop_alert = !is.na(hb_change) & -hb_change >= HB_DROP_ALERT,
+         first_ae_date = pmin(first_onset, first_form2_ae, na.rm = TRUE), d28_done = coalesce(d28_done, FALSE))
+
+issue_log <- bind_rows(issues) |> mutate(severity = factor(severity, c("Critical", "Major", "Minor"))) |> arrange(severity, form, facility, patient_id)
+```
+
+Linked datasets: **`r nrow(patients)`** patients (of whom `r sum(patients$cem_in)` are CEM-enrolled), **`r nrow(visit_status)`** scheduled visits expected for the cohort, and **`r nrow(events)`** distinct adverse events from `r nrow(adr)` reports.
+
+# Monitoring
+
+```{r headline}
+n_reg <- nrow(reg); n_elig <- sum(reg$screen_status == "eligible", na.rm = TRUE); n_given <- sum(reg$sldp_given, na.rm = TRUE)
+n_elig_given <- sum(reg$sldp_given & reg$screen_status == "eligible", na.rm = TRUE)
+n_cem_site <- sum(reg$cem_site, na.rm = TRUE); n_enrolled <- sum(reg$cem_in, na.rm = TRUE)
+vs_due <- visit_status |> filter(status %in% c("Completed", "Overdue", "Due now"))
+d28_past <- visit_status |> filter(visit_type == "d28", window_end < TODAY, status != "Exited")
+headline <- tibble::tribble(
+  ~Domain, ~Indicator, ~Value,
+  "Registration", "Patients registered", as.character(n_reg),
+  "Registration", "P. falciparum confirmed", ci_txt(sum(reg$pf_positive == "yes", na.rm = TRUE), n_reg),
+  "Coverage", "Screened eligible", ci_txt(n_elig, n_reg),
+  "Coverage", "SLDP given among eligible", ci_txt(n_elig_given, n_elig),
+  "Coverage", "SLDP directly observed (among given)", ci_txt(sum(yes(reg$sldp_dot) & reg$sldp_given), n_given),
+  "Dosing", "Dose within 0.15-0.4 mg/kg", ci_txt(sum(between(reg$mg_per_kg, SLDP_DOSE_LOW, SLDP_DOSE_HIGH), na.rm = TRUE), sum(!is.na(reg$mg_per_kg))),
+  "CEM", "Consented and enrolled (CEM-site patients)", ci_txt(n_enrolled, n_cem_site),
+  "CEM", "Due scheduled visits completed", ci_txt(sum(vs_due$status == "Completed"), nrow(vs_due)),
+  "CEM", "Visits overdue now", as.character(sum(visit_status$status == "Overdue")),
+  "CEM", "Day 28 completed (past Day 28 window)", ci_txt(sum(d28_past$status == "Completed"), nrow(d28_past)),
+  "Safety", "Distinct adverse events", as.character(nrow(events)),
+  "Safety", "Serious adverse events", as.character(sum(events$ever_serious)),
+  "Safety", "Hb fall >= 2 g/dL (Day 0/3 pairs)", ci_txt(sum(patients$hb_drop_alert), sum(!is.na(patients$hb_change))),
+  "Safety", "SAEs submitted to pharmacovigilance", ci_txt(sum(events$ever_serious & events$pv_submitted), sum(events$ever_serious)),
+  "Safety", "Events reported within 2 days of onset", ci_txt(sum(events$report_lag <= ADR_REPORT_LAG_TARGET, na.rm = TRUE), sum(!is.na(events$report_lag))),
+  "Data quality", "Critical data issues", as.character(sum(issue_log$severity == "Critical")),
+  "Data quality", "CEM visits linked to a registration", ci_txt(sum(cem$reg_matched, na.rm = TRUE), nrow(cem)),
+  "Data quality", "CEM visits with a manual baseline", ci_txt(sum(cem$baseline_source == "manual", na.rm = TRUE), nrow(cem)))
+```
+
+## Headline indicators
+
+Percentages are shown with exact binomial 95% confidence intervals.
+
+```{r headline-show}
+show_tab(headline)
+```
+
+## Enrolment and coverage
+
+```{r enrolment, fig.height = 4.5}
+if (nrow(reg) > 0) {
+  show_plot(reg |> count(reg_week, cem_in) |> mutate(group = if_else(cem_in, "Enrolled in CEM", "Registered, not in CEM")) |>
+              ggplot(aes(reg_week, n, fill = group)) + geom_col() + scale_fill_manual(values = PAL[c(1, 3)]) +
+              scale_x_date(date_labels = "%d %b") + labs(title = "Weekly registrations", x = "Week starting", y = "Patients", fill = NULL),
+            "M01_weekly_registrations.png")
+}
+```
+
+```{r scorecard}
+fac_followup <- visit_status |> filter(status %in% c("Completed", "Overdue", "Due now")) |>
+  group_by(facility = facility_lbl) |> summarise(visits_due = n(), visits_done = sum(status == "Completed"), overdue = sum(status == "Overdue"), .groups = "drop")
+fac_issues <- issue_log |> left_join(distinct(reg, facility, facility_lbl), by = "facility") |>
+  group_by(facility = facility_lbl) |> summarise(critical_issues = sum(severity == "Critical"), all_issues = n(), .groups = "drop")
+facility_scorecard <- reg |> group_by(district = district_lbl, facility = facility_lbl, cem_site) |>
+  summarise(registered = n(), eligible = sum(screen_status == "eligible", na.rm = TRUE),
+            sldp_given_eligible = sum(sldp_given & screen_status == "eligible", na.rm = TRUE),
+            dot_pct = pct(sum(yes(sldp_dot) & sldp_given), sum(sldp_given)), enrolled = sum(cem_in), .groups = "drop") |>
+  mutate(coverage_pct = pct(sldp_given_eligible, eligible)) |>
+  left_join(fac_followup, by = "facility") |> mutate(followup_pct = pct(visits_done, visits_due)) |>
+  left_join(fac_issues, by = "facility") |> mutate(across(c(overdue, critical_issues, all_issues), ~ coalesce(.x, 0L))) |>
+  arrange(district, desc(registered))
+show_tab(facility_scorecard, "Facility scorecard (coverage, follow-up and data issues)")
+```
+
+```{r coverage-fig, fig.height = 7}
+if (nrow(facility_scorecard |> filter(eligible > 0)) > 0)
+  show_plot(facility_scorecard |> filter(eligible > 0) |>
+              ggplot(aes(reorder(facility, coverage_pct), coverage_pct, fill = cem_site)) + geom_col() +
+              geom_text(aes(label = paste0(sldp_given_eligible, "/", eligible)), hjust = -0.1, size = 3) + coord_flip() +
+              scale_y_continuous(limits = c(0, 115), breaks = seq(0, 100, 25)) +
+              scale_fill_manual(values = PAL[c(3, 1)], labels = c("Non-CEM", "CEM site")) +
+              labs(title = "SLDP coverage among eligible patients", x = NULL, y = "% given SLDP", fill = NULL),
+            "M02_coverage_by_facility.png", h = 7)
+```
+
+## CEM follow-up
+
+```{r followup}
+if (nrow(visit_status) > 0)
+  show_plot(visit_status |> count(visit_type, status) |> ggplot(aes(visit_type, n, fill = status)) + geom_col() +
+              scale_fill_manual(values = c(Completed = PAL[1], `Due now` = PAL[4], Overdue = PAL[6], `Not yet due` = "#C9D2D8",
+                                           `No baseline date` = PAL[2], Exited = "#8A8F94"), drop = FALSE) +
+              labs(title = "Follow-up status by scheduled visit", x = "Visit", y = "Patients", fill = NULL),
+            "M03_followup_status.png")
+followup_by_visit <- visit_status |> filter(status %in% c("Completed", "Overdue", "Due now")) |> group_by(visit_type) |>
+  summarise(due = n(), completed = sum(status == "Completed"), on_time = sum(status == "Completed" & days_late_done <= grace, na.rm = TRUE), .groups = "drop") |>
+  mutate(completion = purrr::map2_chr(completed, due, ci_txt), on_time_pct = pct(on_time, completed))
+show_tab(followup_by_visit, "Completion and timeliness of scheduled visits that are due")
+```
+
+### Patients to contact now
+
+Overdue = past the grace window; Due now = inside it. The full list is in the Excel workbook.
+
+```{r overdue}
+overdue_list <- visit_status |> filter(status %in% c("Overdue", "Due now")) |>
+  transmute(status, facility = facility_lbl, patient_id, patient_name, phone, alternative_contact_phone,
+            visit = toupper(as.character(visit_type)), mode, due_date,
+            days_overdue = pmax(0, as.numeric(TODAY - window_end)), failed_attempts = coalesce(n_attempts_failed, 0L)) |>
+  arrange(desc(status == "Overdue"), desc(days_overdue), facility)
+show_tab(overdue_list |> select(-patient_name, -phone, -alternative_contact_phone), "Overdue and due visits (names and phones in the workbook only)", n = 25)
+```
+
+```{r timeliness, fig.height = 4.5}
+if (nrow(cem) > 0) {
+  print(show_plot(cem |> filter(completed, visit_type != "unscheduled", !is.na(timing_deviation)) |>
+                    ggplot(aes(factor(visit_type, VISIT_SCHEDULE$visit_type), timing_deviation)) + geom_hline(yintercept = 0, colour = "grey60") +
+                    geom_boxplot(fill = "#DCE7EE", outlier.colour = PAL[2]) +
+                    labs(title = "Visit timing against schedule", x = "Visit", y = "Days early (-) / late (+)"), "M04_visit_timeliness.png"))
+  print(show_plot(cem |> filter(phone_visit) |>
+                    mutate(outcome = if_else(contact_success == "yes", "Successful", coalesce(contact_failure_lbl, "Failed"))) |>
+                    count(visit_type, outcome) |> ggplot(aes(factor(visit_type, c("d7", "d14", "d28", "unscheduled")), n, fill = outcome)) +
+                    geom_col() + scale_fill_manual(values = PAL) + labs(title = "Telephone contact outcomes", x = "Visit", y = "Calls", fill = NULL),
+                  "M05_phone_contact.png"))
+}
+```
+
+## Safety reporting
+
+```{r sae-list}
+sae_list <- events |> filter(ever_serious) |> left_join(reg |> select(patient_id, sex, age_years, sldp_given), by = "patient_id") |>
+  select(event_id, facility, onset, first_report, report_lag, criteria, final_outcome, hospitalised, pv_submitted, sldp_given)
+show_tab(sae_list, "Serious adverse events (line list)")
+```
+
+## Data quality
+
+```{r issues}
+show_tab(issue_log |> count(Form = form, Severity = severity, Check = check, sort = TRUE), "Data issues by type")
+version_use <- bind_rows(reg |> count(form = "Form 1", form_version), cem |> count(form = "Form 2", form_version), adr |> count(form = "Form 3", form_version))
+show_tab(version_use, "Form versions in use (old versions mean a device has not updated its forms)")
+collector_summary <- bind_rows(reg |> transmute(form = "Form 1", who = collector, date = submission_date, duration_min),
+                               cem |> transmute(form = "Form 2", who = focal_person, date = submission_date, duration_min),
+                               adr |> transmute(form = "Form 3", who = reporter_name, date = submission_date, duration_min)) |>
+  group_by(form, who) |> summarise(submissions = n(), active_days = n_distinct(date), median_duration_min = round(median(duration_min, na.rm = TRUE), 1), .groups = "drop") |>
+  arrange(form, desc(submissions))
+show_tab(collector_summary, "Submissions by data collector")
+missingness <- bind_rows(
+  tibble(form = "Form 1", variable = c("weight", "phone", "birth_year", "act_type", "sldp_status", "sldp_dose_mg", "cem_consent")),
+  tibble(form = "Form 2 (Day 0/3 completed)", variable = c("hb", "temperature", "jaundice")),
+  tibble(form = "Form 3", variable = c("event_onset", "intensity", "serious", "outcome"))) |>
+  mutate(missing_pct = purrr::map2_dbl(form, variable, function(f, v) {
+    d <- switch(substr(f, 1, 6), "Form 1" = reg, "Form 2" = cem |> filter(visit_type %in% c("d0", "d3"), completed), "Form 3" = adr)
+    if (!v %in% names(d) || nrow(d) == 0) return(NA_real_); pct(sum(is.na(d[[v]])), nrow(d)) })) |> arrange(desc(missing_pct))
+show_tab(missingness, "Missing values in key fields (%)")
+```
+
+# Analysis
+
+```{r results-init}
+results <- list()
+```
+
+## O1. Coverage
+
+```{r o1}
+results$table1 <- reg |> mutate(sldp = if_else(sldp_given, "SLDP given", "SLDP not given")) |> group_by(sldp) |>
+  summarise(n = n(), `age, median (IQR)` = sprintf("%.0f (%.0f-%.0f)", median(age_years, na.rm = TRUE), quantile(age_years, .25, na.rm = TRUE), quantile(age_years, .75, na.rm = TRUE)),
+            `female %` = pct(sum(sex == "female", na.rm = TRUE), n()), `under 5 %` = pct(sum(age_years < 5, na.rm = TRUE), n()),
+            `microscopy-confirmed %` = pct(sum(micro_result == "positive", na.rm = TRUE), n()),
+            `CEM site %` = pct(sum(cem_site, na.rm = TRUE), n()), `insured %` = pct(sum(yes(patient_insured)), n()), .groups = "drop")
+show_tab(results$table1, "Table 1. Patient characteristics by SLDP administration")
+coverage_by <- function(var) reg |> filter(screen_status == "eligible") |> group_by(level = as.character(.data[[var]])) |>
+  summarise(eligible = n(), given = sum(sldp_given), .groups = "drop") |> mutate(variable = var, coverage = purrr::map2_chr(given, eligible, ci_txt), .before = 1)
+results$coverage <- purrr::map_dfr(c("district_lbl", "age_group", "sex", "act_type_lbl", "cem_site"), coverage_by)
+show_tab(results$coverage, "SLDP coverage among eligible patients by subgroup")
+```
+
+**Factors associated with receiving SLDP.** A mixed-effects logistic regression among eligible patients, with a random intercept for facility to account for clustering of practice. Odds ratios with 95% Wald confidence intervals.
+
+```{r o1-model}
+elig <- reg |> filter(screen_status == "eligible", !is.na(age_group), !is.na(sex)) |> mutate(given = as.integer(sldp_given), age_group = droplevels(age_group))
+m_cov <- if (nrow(elig) >= 50 && n_distinct(elig$given) == 2 && n_distinct(elig$facility) >= 3)
+  safe_fit(glmer(given ~ age_group + sex + cem_site + (1 | facility), data = elig, family = binomial, control = glmerControl(optimizer = "bobyqa")), "coverage") else NULL
+if (!is.null(m_cov)) {
+  co <- summary(m_cov)$coefficients; vf <- as.numeric(VarCorr(m_cov)$facility)
+  results$coverage_model <- tibble(term = rownames(co), OR = exp(co[, 1]), lo = exp(co[, 1] - 1.96 * co[, 2]), hi = exp(co[, 1] + 1.96 * co[, 2]), p = co[, 4]) |>
+    filter(term != "(Intercept)") |> mutate(across(c(OR, lo, hi), ~ round(.x, 2)), p = signif(p, 2))
+  show_tab(results$coverage_model, sprintf("Odds ratios for receiving SLDP (facility ICC = %.3f)", vf / (vf + pi^2 / 3)))
+} else knitr::asis_output("*Model not yet fitted: needs at least 50 eligible patients across 3 or more facilities.*")
+```
+
+## O2. Acceptability
+
+```{r o2}
+results$not_given <- reg |> filter(sldp_status == "not_given") |> count(reason = coalesce(no_sldp_reason_lbl, "Not recorded"), sort = TRUE) |> mutate(pct = pct(n, sum(n)))
+show_tab(results$not_given, "Reasons SLDP was not given")
+rc <- grep("^sldp_refusal_specific__", names(reg), value = TRUE)
+results$refusal <- if (length(rc)) reg |> filter(no_sldp_reason == "refusal") |> summarise(across(all_of(rc), ~ sum(.x, na.rm = TRUE))) |>
+  tidyr::pivot_longer(everything(), names_to = "reason", values_to = "n") |> mutate(reason = sub("sldp_refusal_specific__", "", reason)) |> arrange(desc(n)) else tibble()
+show_tab(results$refusal, "Patients' reasons for refusing SLDP (more than one allowed)")
+results$dot <- tibble(given = n_given, observed = ci_txt(sum(yes(reg$sldp_dot) & reg$sldp_given), n_given),
+                      with_food = ci_txt(sum(yes(reg$with_food) & reg$sldp_given), n_given), counselled = ci_txt(sum(yes(reg$counselled) & reg$sldp_given), n_given))
+show_tab(results$dot, "Administration quality among patients given SLDP")
+```
+
+## O3. Screening and dosing quality
+
+```{r o3}
+agree <- reg |> filter(!is.na(screen_status), !is.na(provider_eligibility)) |> mutate(calc = screen_status == "eligible", clin = provider_eligibility == "yes")
+kappa <- function(a, b) { tab <- table(factor(a, c(FALSE, TRUE)), factor(b, c(FALSE, TRUE))); n <- sum(tab)
+  po <- sum(diag(tab)) / n; pe <- sum(rowSums(tab) * colSums(tab)) / n^2; if (pe == 1) NA_real_ else (po - pe) / (1 - pe) }
+results$agreement <- tibble(n = nrow(agree), agreement_pct = pct(sum(agree$calc == agree$clin), nrow(agree)), kappa = round(kappa(agree$calc, agree$clin), 3),
+                            overridden_to_eligible = sum(!agree$calc & agree$clin), overridden_to_not = sum(agree$calc & !agree$clin))
+show_tab(results$agreement, "Agreement between calculated eligibility and clinician decision")
+show_tab(reg |> count(screen_status) |> mutate(pct = pct(n, sum(n))), "Screening result")
+dose <- reg |> filter(!is.na(mg_per_kg))
+results$dosing <- dose |> group_by(age_group) |> summarise(n = n(), median_mg_kg = round(median(mg_per_kg), 3),
+  IQR = sprintf("%.2f-%.2f", quantile(mg_per_kg, .25), quantile(mg_per_kg, .75)), within_range_pct = pct(sum(between(mg_per_kg, SLDP_DOSE_LOW, SLDP_DOSE_HIGH)), n()),
+  above = sum(mg_per_kg > SLDP_DOSE_HIGH), below = sum(mg_per_kg < SLDP_DOSE_LOW), .groups = "drop")
+show_tab(results$dosing, "SLDP dose (mg base per kg) by age group")
+if (nrow(dose) > 0)
+  show_plot(ggplot(dose, aes(mg_per_kg)) + annotate("rect", xmin = SLDP_DOSE_LOW, xmax = SLDP_DOSE_HIGH, ymin = -Inf, ymax = Inf, fill = "#DCE7EE", alpha = .7) +
+              geom_histogram(binwidth = 0.025, fill = PAL[1], colour = "white") + geom_vline(xintercept = SLDP_TARGET_MG_PER_KG, linetype = 2, colour = PAL[2]) +
+              labs(title = "SLDP dose per kilogram", subtitle = "Shaded: accepted range 0.15-0.4 mg/kg; dashed: 0.25 mg/kg target", x = "mg base per kg", y = "Patients"),
+            "A01_dose_mg_per_kg.png")
+```
+
+## O4. Safety
+
+Incidence is calculated in the **CEM-enrolled cohort**, where follow-up is active and the denominator is known.
+
+```{r o4-incidence}
+cohort_pat <- patients |> filter(cem_in)
+results$ae_incidence <- cohort_pat |> group_by(sldp = if_else(sldp_given, "SLDP given", "SLDP not given")) |>
+  summarise(patients = n(), with_event = sum(any_event), with_sae = sum(any_serious), .groups = "drop") |>
+  mutate(event_incidence = purrr::map2_chr(with_event, patients, ci_txt), sae_incidence = purrr::map2_chr(with_sae, patients, ci_txt))
+show_tab(results$ae_incidence, "Adverse event incidence per patient (exact 95% CI)")
+tab <- with(cohort_pat, table(factor(sldp_given, c(TRUE, FALSE)), factor(any_event, c(TRUE, FALSE))))
+if (all(dim(tab) == 2) && all(rowSums(tab) > 0) && all(tab[, 1] > 0)) {
+  r1 <- tab[1, 1] / sum(tab[1, ]); r0 <- tab[2, 1] / sum(tab[2, ]); se <- sqrt(1 / tab[1, 1] - 1 / sum(tab[1, ]) + 1 / tab[2, 1] - 1 / sum(tab[2, ]))
+  results$ae_rr <- tibble(comparison = "SLDP given vs not given", RR = round(r1 / r0, 2), lo = round(exp(log(r1 / r0) - 1.96 * se), 2),
+                          hi = round(exp(log(r1 / r0) + 1.96 * se), 2), fisher_p = signif(fisher.test(tab)$p.value, 2))
+  show_tab(results$ae_rr, "Risk ratio of any adverse event")
+}
+show_tab(events |> count(max_intensity, ever_serious, final_outcome), "Events by intensity, seriousness and latest outcome")
+```
+
+**Haemoglobin, Day 0 to Day 3.** Paired change with a Wilcoxon signed-rank test, the proportion with a fall of 2 g/dL or more, and a linear mixed model of Hb with a patient random intercept (uses patients with a single value too).
+
+```{r o4-hb, fig.width = 6, fig.height = 5, results = "asis"}
+hb_pairs <- patients |> filter(!is.na(hb_d0), !is.na(hb_d3))
+if (nrow(hb_pairs) >= 5) {
+  wt <- safe_fit(wilcox.test(hb_pairs$hb_d3, hb_pairs$hb_d0, paired = TRUE, exact = FALSE), "wilcoxon")
+  results$hb_change <- tibble(pairs = nrow(hb_pairs), median_d0 = median(hb_pairs$hb_d0), median_d3 = median(hb_pairs$hb_d3),
+                              mean_change = round(mean(hb_pairs$hb_change), 2), sd_change = round(sd(hb_pairs$hb_change), 2),
+                              fall_ge2 = ci_txt(sum(-hb_pairs$hb_change >= HB_DROP_ALERT), nrow(hb_pairs)), wilcoxon_p = if (!is.null(wt)) signif(wt$p.value, 2) else NA)
+  cat("\n\n", show_tab(results$hb_change, "Paired haemoglobin change"), "\n\n", sep = "\n")
+  print(show_plot(hb_pairs |> mutate(id = row_number(), alert = -hb_change >= HB_DROP_ALERT) |> tidyr::pivot_longer(c(hb_d0, hb_d3), names_to = "visit", values_to = "hb") |>
+                    mutate(visit = if_else(visit == "hb_d0", "Day 0", "Day 3")) |> ggplot(aes(visit, hb, group = id, colour = alert)) + geom_line(alpha = .5) + geom_point(size = 1) +
+                    scale_colour_manual(values = c(`FALSE` = "#9AA8B2", `TRUE` = PAL[6]), labels = c("Fall < 2 g/dL", "Fall >= 2 g/dL")) +
+                    labs(title = "Haemoglobin, Day 0 to Day 3", x = NULL, y = "Hb (g/dL)", colour = NULL), "A02_hb_day0_day3.png", w = 6))
+}
+hb_long <- cem |> filter(visit_type %in% c("d0", "d3"), !is.na(hb)) |> left_join(reg |> select(patient_id, age_years, sex, sldp_given), by = "patient_id") |>
+  mutate(day3 = as.integer(visit_type == "d3"))
+m_hb <- if (nrow(hb_long) >= 30 && n_distinct(hb_long$patient_id) >= 15) safe_fit(lmer(hb ~ day3 * sldp_given + age_years + sex + (1 | patient_id), data = hb_long), "Hb lmer") else NULL
+if (!is.null(m_hb)) { co <- summary(m_hb)$coefficients
+  results$hb_model <- tibble(term = rownames(co), estimate = round(co[, 1], 3), lo = round(co[, 1] - 1.96 * co[, 2], 3), hi = round(co[, 1] + 1.96 * co[, 2], 3))
+  show_tab(results$hb_model, "Linear mixed model of Hb (g/dL); day3:sldp_given tests whether the Day 3 change differs with SLDP") }
+```
+
+```{r o4-symptoms, fig.width = 7, fig.height = 5}
+results$symptoms <- cem |> filter(phone_visit, contact_success == "yes") |> select(visit_type, any_of(symptom_vars)) |>
+  tidyr::pivot_longer(-visit_type, names_to = "symptom", values_to = "ans") |> group_by(visit_type, symptom) |>
+  summarise(n = sum(!is.na(ans)), yes = sum(ans == "yes", na.rm = TRUE), .groups = "drop") |> mutate(pct = pct(yes, n))
+if (nrow(results$symptoms) > 0)
+  show_plot(ggplot(results$symptoms, aes(factor(visit_type, c("d7", "d14", "d28", "unscheduled")), symptom, fill = pct)) + geom_tile(colour = "white") +
+              geom_text(aes(label = paste0(pct, "%")), size = 3) + scale_fill_gradient(low = "#F7F5F0", high = PAL[2]) +
+              labs(title = "Symptoms reported at telephone follow-up", x = "Visit", y = NULL, fill = "% yes"), "A03_symptom_heatmap.png", w = 7)
+```
+
+**Time to first adverse event** within 28 days of Day 0: Kaplan-Meier by SLDP status and a Cox model adjusted for age and sex. Patients without an event are censored at their last completed contact (maximum Day 28).
+
+```{r o4-survival, results = "asis"}
+tte <- cohort_pat |> filter(!is.na(day0)) |>
+  mutate(event_time = as.numeric(first_ae_date - day0), censor_time = pmin(as.numeric(coalesce(last_contact, day0) - day0), 28),
+         status = as.integer(!is.na(event_time) & event_time >= 0 & event_time <= 28),
+         time = if_else(status == 1, pmax(event_time, 0.5), pmax(censor_time, 0.5)), sldp = factor(if_else(sldp_given, "SLDP given", "SLDP not given")))
+if (nrow(tte) >= 20 && sum(tte$status) >= 3) {
+  km <- survfit(Surv(time, status) ~ sldp, data = tte)
+  km_df <- broom::tidy(km) |> mutate(strata = sub("^sldp=", "", strata))
+  results$km_28d <- km_df |> group_by(strata) |> slice_tail(n = 1) |> ungroup() |>
+    transmute(group = strata, cumulative_incidence = round(1 - estimate, 3), lo = round(1 - conf.high, 3), hi = round(1 - conf.low, 3))
+  cat("\n\n", show_tab(results$km_28d, "Cumulative incidence of a first adverse event by Day 28"), "\n\n", sep = "\n")
+  print(show_plot(ggplot(km_df, aes(time, 1 - estimate, colour = strata)) + geom_step() + scale_colour_manual(values = PAL) +
+                    scale_y_continuous(labels = scales::percent) + labs(title = "Cumulative incidence of a first adverse event", x = "Days since Day 0", y = NULL, colour = NULL),
+                  "A04_time_to_first_ae.png"))
+  if (n_distinct(tte$sldp) == 2) {
+    cox <- safe_fit(coxph(Surv(time, status) ~ sldp + age_years + sex, data = tte), "cox")
+    if (!is.null(cox)) { results$cox <- broom::tidy(cox, exponentiate = TRUE, conf.int = TRUE) |> mutate(across(where(is.numeric), ~ round(.x, 3)))
+      cat("\n\n", show_tab(results$cox, "Cox model: hazard ratios for a first adverse event"), "\n\n", sep = "\n") }
+  }
+} else knitr::asis_output("*Survival analysis not yet run: needs at least 20 followed patients and 3 events.*")
+```
+
+## O5. CEM performance and retention
+
+```{r o5}
+results$retention <- patients |> filter(cem_in, !is.na(day0), day0 + 33 < TODAY) |>
+  summarise(eligible_for_d28 = n(), completed_d28 = sum(d28_done), withdrawn = sum(exit_status == "withdrawn", na.rm = TRUE),
+            lost = sum(exit_status == "lost", na.rm = TRUE), died = sum(exit_status == "died", na.rm = TRUE)) |>
+  mutate(retention = ci_txt(completed_d28, eligible_for_d28))
+show_tab(results$retention, "Retention to Day 28 (patients whose Day 28 window has closed)")
+results$attempts <- cem |> filter(phone_visit) |> group_by(attempt = pmin(coalesce(attempt_number, 1), 4)) |>
+  summarise(calls = n(), success = sum(contact_success == "yes", na.rm = TRUE), .groups = "drop") |> mutate(success_pct = pct(success, calls))
+show_tab(results$attempts, "Telephone contact success by attempt number (4 = 4 or more)")
+```
+
+## O6. Parasitological follow-up
+
+```{r o6}
+d3 <- cem |> filter(visit_type == "d3", completed)
+results$d3_positivity <- d3 |> filter(d3_repeat_test_done == "yes") |>
+  summarise(tested = n(), rdt_positive = sum(d3_rdt_result %in% c("pf", "other"), na.rm = TRUE), microscopy_positive = sum(d3_microscopy_result == "positive", na.rm = TRUE)) |>
+  mutate(microscopy_positivity = ci_txt(microscopy_positive, tested))
+show_tab(results$d3_positivity, "Day 3 repeat malaria test")
+g0 <- reg |> filter(micro_result %in% c("positive", "negative")) |> transmute(patient_id, gam_d0 = coalesce(parasite_stages__gametocytes, 0L) == 1 & micro_result == "positive")
+g3 <- d3 |> filter(d3_microscopy_result %in% c("positive", "negative")) |>
+  transmute(patient_id, gam_d3 = coalesce(d3_microscopy_stages__gametocytes, 0L) == 1 & d3_microscopy_result == "positive")
+gam <- inner_join(g0, g3, by = "patient_id")
+if (nrow(gam) >= 10) {
+  results$gametocytes <- tibble(pairs = nrow(gam), day0_carriage = ci_txt(sum(gam$gam_d0), nrow(gam)), day3_carriage = ci_txt(sum(gam$gam_d3), nrow(gam)),
+    mcnemar_p = tryCatch(signif(mcnemar.test(table(factor(gam$gam_d0, c(TRUE, FALSE)), factor(gam$gam_d3, c(TRUE, FALSE))))$p.value, 2), error = function(e) NA))
+  show_tab(results$gametocytes, "Gametocyte carriage by microscopy, Day 0 vs Day 3 (paired, McNemar test)")
+} else knitr::asis_output("*Gametocyte comparison needs at least 10 patients with microscopy on both days.*")
+```
+
+## O7. Data quality summary
+
+```{r o7}
+results$issue_summary <- issue_log |> count(form, severity, sort = TRUE)
+show_tab(results$issue_summary, "Open issues by form and severity")
+if (nrow(issue_log) > 0)
+  show_plot(issue_log |> count(check, severity) |> ggplot(aes(reorder(stringr::str_trunc(check, 60), n), n, fill = severity)) + geom_col() + coord_flip() +
+              scale_fill_manual(values = c(Critical = PAL[6], Major = PAL[2], Minor = PAL[3])) + labs(title = "Data issues by type", x = NULL, y = "Records", fill = NULL),
+            "M06_data_issues.png", w = 11, h = 6)
+```
+
+# Exports
+
+```{r export}
+if (isTRUE(params$write_excel)) {
+  wb <- createWorkbook(); hdr <- createStyle(textDecoration = "bold", fgFill = "#1C2B36", fontColour = "#F3F1EC", wrapText = TRUE)
+  add_sheet <- function(name, df, note = NULL) {
+    addWorksheet(wb, name); start <- 1
+    if (!is.null(note)) { writeData(wb, name, note, startRow = 1); start <- 3 }
+    if (is.null(df) || nrow(df) == 0) df <- tibble(note = "No records yet")
+    writeData(wb, name, as.data.frame(df), startRow = start, headerStyle = hdr); freezePane(wb, name, firstActiveRow = start + 1)
+    setColWidths(wb, name, cols = seq_len(ncol(df)), widths = "auto")
+  }
+  add_sheet("Headline", headline, paste("SLDP pilot monitoring, data pulled", raw$registration$pulled_at %||% RUN_LABEL))
+  add_sheet("Facility scorecard", facility_scorecard)
+  add_sheet("Overdue visits", overdue_list, "Patients to contact. Overdue = past the grace window; Due now = within it.")
+  add_sheet("Data issues", issue_log, "One row per problem. Critical first. Resolve in Kobo and re-run.")
+  add_sheet("SAE line list", sae_list); add_sheet("Events", events)
+  add_sheet("Collectors", collector_summary); add_sheet("Form versions", version_use)
+  for (nm in names(results)) add_sheet(substr(paste0("A_", nm), 1, 31), results[[nm]])
+  saveWorkbook(wb, file.path(DIR_OUT, sprintf("SLDP_monitoring_%s.xlsx", RUN_LABEL)), overwrite = TRUE)
+}
+saveRDS(list(registration = reg, cem_visits = cem, adr_reports = adr, events = events, patients = patients, visit_status = visit_status,
+             cem_medicines = cem_meds, adr_medicines = adr_meds, issue_log = issue_log, results = results), file.path(DIR_OUT, "analysis_datasets.rds"))
+```
+
+Files written to **`r DIR_OUT`**: the Excel workbook (headline, facility scorecard, overdue visit list with contacts, issue log, SAE line list, events, collectors, form versions and every analysis table), the figures as PNG, and `analysis_datasets.rds` with all cleaned and linked datasets.
+
+# Session information {-}
+
+```{r session}
+sessionInfo()
+```

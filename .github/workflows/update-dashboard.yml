@@ -1,0 +1,80 @@
+# Pulls the SLDP Kobo forms, rebuilds the aggregate dashboard data and
+# publishes docs/ to GitHub Pages. Runs every 6 hours, on every push to main,
+# and on demand (Actions > Update SLDP dashboard > Run workflow).
+name: Update SLDP dashboard
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"        # 00:17, 06:17, 12:17, 18:17 Accra time (UTC)
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for the Kobo token
+        id: token
+        env:
+          KOBO_TOKEN: ${{ secrets.KOBO_TOKEN }}
+        run: |
+          if [ -n "$KOBO_TOKEN" ]; then echo "live=true" >> "$GITHUB_OUTPUT"; else
+            echo "live=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::KOBO_TOKEN secret not set. Publishing the demonstration data."; fi
+
+      - uses: r-lib/actions/setup-r@v2
+        if: steps.token.outputs.live == 'true'
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        if: steps.token.outputs.live == 'true'
+        with:
+          packages: |
+            any::httr2
+            any::jsonlite
+            any::dplyr
+            any::tidyr
+            any::purrr
+            any::stringr
+            any::tibble
+            any::lubridate
+            any::lme4
+            any::survival
+
+      - name: Pull Kobo data and build aggregates
+        if: steps.token.outputs.live == 'true'
+        env:
+          KOBO_TOKEN: ${{ secrets.KOBO_TOKEN }}
+          SLDP_RAW_DIR: ${{ runner.temp }}/sldp_raw     # raw records never enter the published folder
+        run: Rscript R/build_dashboard_data.R
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
