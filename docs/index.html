@@ -123,6 +123,7 @@ footer{max-width:1360px;margin:0 auto;padding:0 32px 32px;font-size:12.5px;color
   </div>
 </header>
 <div class="demo" id="demo" hidden>Demonstration data. These figures come from simulated records and will be replaced automatically by live pilot data after the first scheduled update.</div>
+<div class="demo" id="trainNote" hidden></div>
 
 <div class="filters" id="filters">
   <label>Period<select id="fPeriod">
@@ -577,6 +578,8 @@ async function init() {
   try { const r = await fetch("data/dashboard.json?v=" + Date.now()); D = await r.json(); }
   catch (e) { document.querySelector("main").replaceChildren(el("div", { class: "empty" }, "The dashboard data could not be loaded. Please refresh the page.")); return; }
   const m = D.meta; $("demo").hidden = !m.is_demo;
+  if (!m.is_demo && m.includes_test) { $("trainNote").hidden = false; $("trainNote").textContent = "Training records included. These figures contain TEST practice records; switch them off before the pilot goes live."; }
+  else if (!m.is_demo && m.test_patients_excluded > 0) { $("trainNote").hidden = false; $("trainNote").textContent = `${m.test_patients_excluded} training (TEST) patient${m.test_patients_excluded > 1 ? "s are" : " is"} excluded from these figures, together with their follow-up visits and ADR reports.`; }
   $("meta").replaceChildren(...[["Data as of", m.pulled_at || m.generated_at], ["Dashboard updated", m.generated_at + " GMT"], ["Pilot start", m.pilot_start], ["Facilities", D.facilities.code.length]]
     .map(([k, v]) => { const s = el("span"); s.append(k + ": "); s.appendChild(el("b", {}, v)); return s; }));
   $("foot").textContent = "SLDP pilot, Greater Accra. Aggregate figures only; no personal identifiers are published. Data: KoboToolbox (Forms 1 to 3), refreshed automatically every 6 hours. Developed by Kingsley Amegah.";

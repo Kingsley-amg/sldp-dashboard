@@ -204,6 +204,12 @@ clean_common <- function(df, form, name_col = NULL, note_col = NULL) {
 }
 
 # ---- Form 1: registration ----
+# Patient IDs of training registrations (name starts with TEST or comment starts with TEST RECORD),
+# used to drop their follow-up visits and ADR reports too, even when those notes do not say TEST
+test_ids <- if (nrow(reg_raw) == 0) character(0) else ensure_cols(reg_raw, c("patient_name", "comments", "patient_id")) |>
+  filter(stringr::str_detect(coalesce(patient_name, ""), "^TEST\\b") | stringr::str_detect(coalesce(comments, ""), "^TEST RECORD")) |>
+  pull(patient_id) |> stringr::str_squish() |> toupper() |> unique()
+
 reg <- reg_raw |>
   ensure_cols(c("district","facility","facility_cem","registration_date","patient_name","birth_year","patient_id","phone",
                 "collector","sex","age_months","weight","test_type","rdt_result","micro_result","micro_species","density",
@@ -260,6 +266,8 @@ cem <- cem_raw |>
   apply_codebook(cb_cem)
 if (DROP_TEST) cem <- cem |> filter(!stringr::str_detect(coalesce(baseline_notes, ""), "^TEST RECORD"),
                                      !stringr::str_detect(coalesce(exam_notes, ""), "^TEST RECORD"))
+# Training cascade: also drop visits of patients registered as TEST records
+if (DROP_TEST) cem <- cem |> filter(!patient_id %in% test_ids)
 add_issue(cem |> filter(!reg_matched | !patient_id %in% reg$patient_id), "Form 2", "Visit not linked to a registration (orphan visit)", "Critical")
 add_issue(cem |> filter(visit_date > TODAY), "Form 2", "Visit date in the future", "Major", "visit_date")
 add_issue(cem |> filter(!is.na(day0_date) & visit_date < day0_date), "Form 2", "Visit before baseline date", "Major", "visit_date")
@@ -282,6 +290,8 @@ adr <- adr_raw |>
          report_lag_days = as.numeric(report_date - event_onset), is_serious = serious == "yes",
          reg_matched = to_num(registration_matches) == 1, permanent_ae_id = toupper(stringr::str_squish(permanent_ae_id))) |>
   apply_codebook(cb_adr)
+# Training cascade: also drop ADR reports of patients registered as TEST records
+if (DROP_TEST) adr <- adr |> filter(!patient_id %in% test_ids)
 add_issue(adr |> filter(!reg_matched), "Form 3", "ADR patient not found in registration (reconcile)", "Major")
 add_issue(adr |> filter(!stringr::str_detect(coalesce(permanent_ae_id, ""), EVENT_PATTERN)), "Form 3", "Event ID missing or malformed", "Critical", "permanent_ae_id")
 add_issue(adr |> filter(stringr::str_detect(coalesce(permanent_ae_id, ""), "^GA-") & substr(permanent_ae_id, 1, 11) != patient_id), "Form 3", "Event ID does not start with this Patient ID", "Critical", "permanent_ae_id")

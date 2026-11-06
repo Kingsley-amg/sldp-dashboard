@@ -16,7 +16,7 @@
 
 params <- list(
   use_cache   = tolower(Sys.getenv("SLDP_USE_CACHE", "false")) == "true",
-  drop_test   = TRUE,
+  drop_test   = tolower(Sys.getenv("SLDP_INCLUDE_TEST", "false")) != "true",   # repo variable SLDP_INCLUDE_TEST=true shows training records
   pilot_start = Sys.getenv("SLDP_PILOT_START", "2026-10-01"),
   kobo_server = Sys.getenv("KOBO_SERVER", "https://eu.kobotoolbox.org"))
 OUT_JSON <- Sys.getenv("SLDP_OUT_JSON", file.path("docs", "data", "dashboard.json"))
@@ -157,6 +157,7 @@ cols <- function(df) if (is.null(df) || nrow(df) == 0) list() else as.list(as.da
 out <- list(
   meta = list(generated_at = format(Sys.time(), "%Y-%m-%d %H:%M", tz = LOCAL_TZ), pulled_at = raw$registration$pulled_at %||% NA,
               today = format(TODAY), pilot_start = format(PILOT_START), is_demo = IS_DEMO,
+              includes_test = !DROP_TEST, test_patients_excluded = if (DROP_TEST) length(test_ids) else 0L,
               thresholds = list(dose_low = SLDP_DOSE_LOW, dose_high = SLDP_DOSE_HIGH, dose_target = SLDP_TARGET_MG_PER_KG,
                                 hb_drop = HB_DROP_ALERT, report_lag = ADR_REPORT_LAG_TARGET),
               visit_schedule = cols(VISIT_SCHEDULE)),

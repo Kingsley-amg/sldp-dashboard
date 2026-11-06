@@ -62,6 +62,7 @@ jobs:
         env:
           KOBO_TOKEN: ${{ secrets.KOBO_TOKEN }}
           SLDP_RAW_DIR: ${{ runner.temp }}/sldp_raw     # raw records never enter the published folder
+          SLDP_INCLUDE_TEST: ${{ vars.SLDP_INCLUDE_TEST }}  # repository variable; "true" shows training (TEST) records
         run: Rscript R/build_dashboard_data.R
 
       - uses: actions/configure-pages@v5
