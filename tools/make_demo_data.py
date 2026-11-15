@@ -146,6 +146,7 @@ for i in range(a.n):
     pf = test_done == "yes" and R.random() < 0.9
     put(rec, P1, district=f.get("district"), facility=f["name"], facility_cem="yes" if cem_site else "no",
         registration_date=rdate.isoformat(), patient_uuid=hexid(32), patient_id=p["pid"], first_name=p["first"], last_name=p["last"],
+        caregiver_name=(R.choice(FIRST) + " " + p["last"]) if yrs < 18 else None, caregiver_relation=R.choice(["mother", "mother", "father", "grandparent"]) if yrs < 18 else None,
         phone=p["phone"], age_unit="years" if months >= 24 else "months", age_value=int(yrs) if months >= 24 else months,
         age_months=months, age_years=round(yrs, 2), sex=sex, nhis_status=R.choice(["valid_nhis", "valid_nhis", "not_insured", "invalid_nhis"]),
         weight=w, test_done=test_done)
@@ -209,10 +210,20 @@ for i in range(a.n):
     if given and cem_site:
         put(rec, P1, cem_enrolled="yes" if enrolled else "no")
     if enrolled:
-        put(rec, P1, phone_final=p["phone"], alt_contact_name=R.choice(FIRST) + " " + R.choice(LAST), alt_contact_phone=phone(), cem_card_done="yes")
+        if R.random() < 0.9:
+            put(rec, P1, phone_final=p["phone"], alt_contact_any="yes", alt_contact_name=R.choice(FIRST) + " " + R.choice(LAST), alt_contact_phone=phone(), cem_card_done="yes")
+        else:
+            put(rec, P1, phone_final=p["phone"], alt_contact_any="no", cem_card_done="yes")
     put(rec, P1, adr_today="no", entry_name="Officer " + R.choice(LAST))
     patients.append(p)
     reg_recs.append(meta(rec, at(rdate), "v2026111401"))
+
+# One patient registered twice under a new ID (data-quality check: possible duplicate registration)
+import copy
+src = next(r for r in reg_recs if r.get(P1["phone"]) and r.get(P1["registration_date"]) and r[P1["registration_date"]] < (TODAY - timedelta(days=6)).isoformat())
+dup = copy.deepcopy(src); dup[P1["patient_id"]] = pid()
+dup[P1["registration_date"]] = (date.fromisoformat(src[P1["registration_date"]]) + timedelta(days=5)).isoformat()
+reg_recs.append(meta(dup, at(date.fromisoformat(dup[P1["registration_date"]])), "v2026111601"))
 
 # ---------------------------------------------------------------- FORM 2: CEM contacts and adverse events
 SCHED = [("d0", 0), ("d3", 3), ("d7", 7), ("d14", 14), ("d28", 28)]
@@ -295,6 +306,8 @@ for p in patients:
                 attempts.append(("ok", vdate + timedelta(days=n_fail)))
         elif v == "d3" and offd > drop_after:
             break
+        elif v == "d3" and R.random() < 0.12:   # missed Day 3 visit, seen a day or two later
+            attempts.append(("missed", vdate)); attempts.append(("ok", vdate + timedelta(days=R.randint(1, 2))))
         else:
             attempts.append(("ok", vdate))
         for k, (res, adate) in enumerate(attempts):
@@ -313,9 +326,13 @@ for p in patients:
                 if consent == "yes":
                     lab = 0 if p["hb0"] >= (13 if p["sex"] == "male" and p["years"] >= 15 else 11.5) else 1 if p["hb0"] >= 10 else 2 if p["hb0"] >= 8 else 3
                     put(rec, P2, g6pd_status=g6, diabetes="no", hypertension="yes" if p["years"] > 40 and R.random() < .25 else "no",
-                        f_temp=round(R.gauss(37.6, .8), 1), f_pulse=R.randint(70, 120), f_hb=p["hb0"], f_lab_grade=lab, f_clinical_grade="none" if lab < 2 else "mild",
+                        f_temp=round(R.gauss(37.6, .8), 1), f_pulse=R.randint(70, 120), f_hb_avail="yes", f_hb=p["hb0"], f_lab_grade=lab, f_clinical_grade="none" if lab < 2 else "mild",
                         f_status="continuing")
                 put(rec, P2, completed="yes" if consent == "yes" else "no")
+            elif v == "d3" and res == "missed":
+                put(rec, P2, g_attended="no", g_na_reason=R.choice(["forgot", "transport", "not_reached", "too_sick"]), g_reminded="yes",
+                    g_next_attempt=(adate + timedelta(days=1)).isoformat(), completed="no")
+                rec[P2["mode"]] = "phone"
             elif v == "d3":
                 hb_alert = hb3 - p["hb0"] <= -2
                 lab = 0 if hb3 >= 11.5 else 1 if hb3 >= 10 else 2 if hb3 >= 8 else 3
@@ -323,7 +340,8 @@ for p in patients:
                 put(rec, P2, g_full_act="yes" if R.random() < .93 else "no", g_dark_urine=du, g_pallor="yes" if hb_alert and R.random() < .5 else "no",
                     g_fatigue="yes" if R.random() < .12 else "no", g_jaundice="yes" if R.random() < .01 else "no", g_hospitalised="no",
                     g_new_meds="no", g_hb=hb3, g_lab_grade=lab, d0_hb=p["hb0"], hb_change=round(hb3 - p["hb0"], 1), hb_alert="yes" if hb_alert else "no",
-                    g_repeat_test="yes" if R.random() < .3 else "no", g_status="continuing", completed="yes")
+                    g_repeat_test="yes" if R.random() < .3 else "no", g_status="continuing", completed="yes", g_attended="yes",
+                    g_preg_found=("yes" if R.random() < .01 else "no") if p["sex"] == "female" and p["years"] >= 10 else None)
                 p["hb3"] = hb3
             else:
                 if res == "fail":
@@ -340,7 +358,7 @@ for p in patients:
                     if wd:
                         put(rec, P2, m_status="withdrawn", m_date=adate.isoformat())
             # Adverse events
-            ae_new = (v == "d0" and consent == "yes" and R.random() < .04) or (v == "d3" and (hb_alert or R.random() < .1)) or \
+            ae_new = (v == "d0" and consent == "yes" and R.random() < .04) or (v == "d3" and res != "missed" and (hb_alert or R.random() < .1)) or \
                      (v in ("d7", "d14") and res == "ok" and R.random() < .04)
             is_death = died and v == "d7" and res == "ok"
             if ae_new or is_death:
@@ -405,6 +423,14 @@ for p in patients:
             report_uuid=hexid(32), facility=p["fac"], district=p["district"], sex=p["sex"], reported_through="non_cem", cem_block="no",
             c_outcome="R1", s_serious="yes" if sev else "no", f_name="Reporter " + R.choice(LAST), f_report_date=ud.isoformat())
         adr_recs.append(meta(upd, at(ud), "v2026111401"))
+
+for p in R.sample([p for p in patients if p["given"] and not p["enrolled"] and p["sex"] == "female" and p["years"] >= 15], 3):
+    rec = {}; fd = min(p["pq_date"] + timedelta(days=R.randint(3, 12)), TODAY)
+    put(rec, P3, patient_id=p["pid"], reg_found="yes", r_cem_enrolled="no", report_type="exposure", report_uuid=hexid(32), new_event_id=f"{p['pid']}-E{hexid(6).upper()}",
+        facility=p["fac"], district=p["district"], sex="female", reported_through="non_cem", cem_block="no", x_types="pregnant", x_preg_weeks=R.randint(5, 14),
+        x_found_date=fd.isoformat(), x_details="Pregnancy found after treatment", x_reaction="no", f_name="Reporter " + R.choice(LAST), f_report_date=fd.isoformat())
+    rec[P3["event_id"]] = rec[P3["new_event_id"]]
+    adr_recs.append(meta(rec, at(fd), "v2026111601"))
 
 # ---------------------------------------------------------------- training records (first name TEST): must be excluded
 for k in range(3):

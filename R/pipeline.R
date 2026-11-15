@@ -186,7 +186,7 @@ reg_raw <- to_table(raw$registration) |>
                 "pq_accepted", "pq_not_given_reasons", "pq_given", "pq_nd_reason", "pq_brand", "rec_dose", "act_rec_dose", "pq_strength",
                 "pq_dose", "pq_dose_mg", "mg_per_kg", "dose_flag", "dose_basis", "dose_confirm", "dot", "dot_reasons", "pq_with_act",
                 "with_food_ans", "vomit30", "dose_repeated", "pq_datetime", "pq_date", "counselled", "other_meds_any", "cem_enrolled",
-                "phone_final", "alt_contact_name", "alt_contact_phone", "cem_card_done", "adr_today", "adr_signs", "adr_serious",
+                "phone_final", "alt_contact_any", "alt_contact_name", "alt_contact_phone", "caregiver_name", "caregiver_relation", "weight_check", "cem_card_done", "adr_today", "adr_signs", "adr_serious",
                 "adr_serious_criteria", "entry_name"))
 test_ids <- reg_raw |> filter(is_test(first_name) | is_test(last_name)) |> pull(patient_id) |> unique()
 n_test <- c(form1 = length(test_ids))
@@ -223,6 +223,14 @@ reg <- reg_raw |>
   left_join(fac_map |> select(facility, facility_lbl, district_lbl), by = "facility")
 
 add_issue(reg |> group_by(patient_id) |> filter(n() > 1) |> ungroup(), "Form 1", "Patient ID registered more than once", "Critical")
+# Same person registered again under a new ID: same name, phone and facility within 28 days
+dup_people <- reg |> filter(!is.na(registration_date)) |>
+  mutate(nm = stringr::str_squish(tolower(paste(first_name, last_name))), ph = coalesce(phone_final, phone)) |>
+  filter(!is.na(ph), nm != "") |> group_by(nm, ph, facility) |> arrange(registration_date, .by_group = TRUE) |>
+  mutate(gap_prev = as.numeric(registration_date - lag(registration_date)), gap_next = as.numeric(lead(registration_date) - registration_date),
+         id_prev = lag(patient_id), id_next = lead(patient_id)) |>
+  filter((!is.na(gap_prev) & gap_prev <= 28 & id_prev != patient_id) | (!is.na(gap_next) & gap_next <= 28 & id_next != patient_id)) |> ungroup()
+add_issue(dup_people, "Form 1", "Possible duplicate registration (same name, phone and facility within 28 days, different ID)", "Major")
 add_issue(reg |> filter(registration_date > TODAY | registration_date < PILOT_START), "Form 1", "Registration date outside the pilot period", "Major")
 add_issue(reg |> filter(sldp_given, is.na(pq_date)), "Form 1", "Primaquine given but no date and time", "Critical")
 add_issue(reg |> filter(sldp_given, dose_flag %in% "yes"), "Form 1", "Primaquine dose does not match either dosing table (confirmed by officer)", "Major")
@@ -242,7 +250,8 @@ visits_raw <- to_table(raw$cem) |>
                 "f_hb", "f_lab_grade", "f_grade", "f_status", "g_full_act", "g_new_symptoms", "g_dark_urine", "g_pallor", "g_fatigue",
                 "g_jaundice", "g_palpitations", "g_hospitalised", "g_new_meds", "g_hb", "g_lab_grade", "g_clinical_grade", "d0_hb",
                 "hb_change", "hb_alert", "g_repeat_test", "g_test_type", "g_rdt", "g_species", "g_stages", "g_status",
-                "h_success", "h_attempt", "h_fail_reason", "h_withdrawing", "h_next_attempt", paste0("h_", sym), "h_hospitalised",
+                "h_success", "h_attempt", "h_fail_reason", "h_withdrawing", "h_next_attempt", "g_attended", "g_na_reason", "g_withdrawing", "g_next_attempt",
+                "f_hb_avail", "g_preg_found", "h_preg_found", "u_preg_found", "u_d0_hb", paste0("h_", sym), "h_hospitalised",
                 "h_new_meds", "h_ae", "h_referred", "h_status", "h_d28_outcome", "u_reason", paste0("u_", sym), "u_hb", "u_hb_change",
                 "u_hospitalised", "u_ae", "u_referred", "u_status", "status_now", "m_status", "m_date", "ae_flag", "ae_any", "completed",
                 "review_ok", "f_status_date", "g_status_date", "h_status_date", "u_status_date"))
@@ -250,7 +259,7 @@ n_test["form2"] <- sum(visits_raw$patient_id %in% test_ids | is_test(visits_raw$
 visits <- visits_raw |>
   { \(d) if (DROP_TEST) filter(d, !patient_id %in% test_ids, !is_test(interviewer)) else d }() |>
   mutate(submission_time = to_dt(`_submission_time`), submission_date = as.Date(submission_time),
-         visit_date = to_date(visit_date), day0_date = to_date(day0_date), m_date = to_date(m_date), h_next_attempt = to_date(h_next_attempt),
+         visit_date = to_date(visit_date), day0_date = to_date(day0_date), m_date = to_date(m_date), h_next_attempt = coalesce(to_date(h_next_attempt), to_date(g_next_attempt)),
          status_date = coalesce(to_date(f_status_date), to_date(g_status_date), to_date(h_status_date), to_date(u_status_date)),
          across(c(f_hb, g_hb, d0_hb, hb_change, u_hb, u_hb_change, days_since_day0, f_temp, f_lab_grade, h_attempt), to_num),
          done = yes(completed), phone = visit %in% c("d7", "d14", "d28") | (visit == "unscheduled" & mode %in% "phone"),
@@ -315,21 +324,23 @@ adr_raw <- to_table(raw$adr) |>
   ensure_cols(c("_id", "_uuid", "_submission_time", "__version__", "patient_id", "reg_found", "r_cem_enrolled", "report_type",
                 "existing_event_id", "event_id", "facility", "district", "sex", "age_years", "day0_date", "reported_through", "m_first_name",
                 "m_cem", "a_pregnancy", "b_signs", "b_onset", "b_day", "b_stopped", "b_stop_date", "b_mgmt", "b_intensity", "c_outcome",
-                "s_serious", "s_criteria", "e_any", "f_name", "f_profession", "f_report_date", "report_lag", "cem_block"))
+                "s_serious", "s_criteria", "e_any", "f_name", "f_profession", "f_report_date", "report_lag", "cem_block", "d0_declined",
+                "x_types", "x_found_date", "x_preg_weeks"))
 prod_items <- flatten_repeat(raw$adr$records, "product")
 n_test["form3"] <- sum(adr_raw$patient_id %in% test_ids | is_test(adr_raw$m_first_name) | is_test(adr_raw$f_name))
 adr <- adr_raw |>
   { \(d) if (DROP_TEST) filter(d, !patient_id %in% test_ids, !is_test(m_first_name), !is_test(f_name)) else d }() |>
   mutate(submission_time = to_dt(`_submission_time`), submission_date = as.Date(submission_time),
          onset = to_date(b_onset), report_date = to_date(f_report_date), stop_date = to_date(b_stop_date), age_years = to_num(age_years),
-         facility = coalesce(facility, "unknown"), cem_participant = yes(r_cem_enrolled) | yes(m_cem)) |>
+         facility = coalesce(facility, "unknown"), cem_participant = (yes(r_cem_enrolled) & !yes(d0_declined)) | yes(m_cem)) |>
   left_join(fac_map |> select(facility, facility_lbl, cem_site), by = "facility")
 if (nrow(prod_items)) {
   w <- prod_items |> ensure_cols("p_which") |> group_by(`_parent`) |> summarise(which_all = paste(na.omit(p_which), collapse = " "), .groups = "drop")
   adr <- adr |> left_join(w, by = c("_id" = "_parent"))
 }
 adr <- ensure_cols(adr, "which_all")
-adr_events <- summarise_events(if (nrow(adr)) adr |>
+exposures <- adr |> filter(report_type %in% "exposure")
+adr_events <- summarise_events(if (nrow(adr)) adr |> filter(!report_type %in% "exposure") |>
   transmute(event_id, patient_id, facility, type = coalesce(report_type, "new"), onset, signs = b_signs, record_date = report_date, submission_time,
             intensity = b_intensity, serious = s_serious, criteria = s_criteria, outcome = c_outcome, stopped = b_stopped, stop_date,
             informed_date = report_date, which_all = coalesce(which_all, ""), mgmt = b_mgmt) |> filter(!is.na(event_id)) else NULL, "Spontaneous (Form 3)")
@@ -350,14 +361,15 @@ d0v <- visits |> filter(visit == "d0") |> arrange(submission_time) |> group_by(p
             clin_grade_d0 = last_val(f_clinical_grade), g6pd = last_val(g6pd_status), day0_manual = last_val(to_date(day0_manual)),
             .groups = "drop")
 d3v <- visits |> filter(visit == "d3", done) |> arrange(submission_time) |> group_by(patient_id) |>
-  summarise(hb_d3 = last_val(g_hb), d3_date = last(visit_date), .groups = "drop")
+  summarise(hb_d3 = last_val(g_hb), d3_date = last(visit_date), hb_d0_at_d3 = last_val(d0_hb), .groups = "drop")
 contact <- visits |> group_by(patient_id) |>
   summarise(last_contact = safe_max(visit_date[done]), n_contacts = sum(done),
             haem_sign = any(yes(g_dark_urine) | yes(g_jaundice) | yes(h_dark_urine) | yes(h_jaundice) | yes(u_dark_urine) | yes(u_jaundice)),
             hosp_any = any(yes(g_hospitalised) | yes(h_hospitalised) | yes(u_hospitalised)),
+            preg_found = any(yes(g_preg_found) | yes(h_preg_found) | yes(u_preg_found)),
             refused = any(visit == "d0" & consent %in% "no"), .groups = "drop")
 exits <- visits |>
-  mutate(ex = case_when(h_withdrawing %in% "yes" ~ "withdrawn", m_status %in% c("withdrawn", "lost", "died", "completed") ~ m_status,
+  mutate(ex = case_when(h_withdrawing %in% "yes" | g_withdrawing %in% "yes" ~ "withdrawn", m_status %in% c("withdrawn", "lost", "died", "completed") ~ m_status,
                         status_now %in% "withdrew" ~ "withdrawn", status_now %in% c("lost", "died") ~ status_now, TRUE ~ NA_character_),
          ex_date = coalesce(m_date, status_date, visit_date)) |>
   filter(!is.na(ex)) |> arrange(ex_date) |> group_by(patient_id) |>
@@ -373,9 +385,9 @@ cohort <- reg |> filter(cem_in) |>
   left_join(exits, by = "patient_id") |> left_join(ev_pat, by = "patient_id") |>
   mutate(refused = coalesce(refused, FALSE), day0 = coalesce(pq_date, day0_manual),
          n_events = coalesce(n_events, 0L), any_ae = n_events > 0, any_serious = coalesce(any_serious, FALSE),
-         hb_change = hb_d3 - hb_d0, hb_drop = !is.na(hb_change) & hb_change <= -HB_DROP_ALERT,
+         hb_d0 = coalesce(hb_d0, hb_d0_at_d3), hb_change = hb_d3 - hb_d0, hb_drop = !is.na(hb_change) & hb_change <= -HB_DROP_ALERT,
          haemolysis = coalesce(haem_sign, FALSE) | coalesce(haem_event, FALSE) | hb_drop,
-         hosp_any = coalesce(hosp_any, FALSE),
+         hosp_any = coalesce(hosp_any, FALSE), preg_found = coalesce(preg_found, FALSE),
          anaemic_d0 = !is.na(lab_grade_d0) & lab_grade_d0 >= 1,
          hb_grade_d0 = factor(case_when(is.na(lab_grade_d0) ~ NA_character_, lab_grade_d0 == 0 ~ "Normal", lab_grade_d0 == 1 ~ "Mild (grade 1)",
                                         lab_grade_d0 == 2 ~ "Moderate (grade 2)", TRUE ~ "Severe (grade 3-4)"),
@@ -392,7 +404,7 @@ attempts <- visits |> filter(visit %in% VISIT_SCHEDULE$visit) |> group_by(patien
             next_attempt = safe_max(h_next_attempt), declined = any(h_fail_reason %in% "declined"), .groups = "drop")
 visit_status <- cohort |>
   select(patient_id, facility, facility_lbl, district_lbl, day0, exit_status, exit_date, first_name, last_name, phone_final, alt_contact_name,
-         alt_contact_phone, any_serious, hb_drop) |>
+         alt_contact_phone, caregiver_name, caregiver_relation, any_serious, hb_drop) |>
   tidyr::crossing(VISIT_SCHEDULE) |>
   left_join(attempts, by = c("patient_id", "visit")) |>
   mutate(done = coalesce(done, FALSE), n_fail = coalesce(n_fail, 0L), due = day0 + offset, window_end = due + grace,

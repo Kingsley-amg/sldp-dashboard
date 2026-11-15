@@ -247,7 +247,7 @@ footer{max-width:1400px;margin:0 auto;padding:0 32px 32px;font-size:12.5px;color
 
 <!-- ============ SPONTANEOUS ============ -->
 <section class="tab" id="t-spont">
-  <p class="intro">ADR/SAE reports for patients not enrolled in CEM (Form 3): patients at non-CEM facilities, and patients at CEM sites who did not consent to CEM. Events of CEM participants are recorded in Form 2 and appear under Safety (CEM).</p>
+  <p class="intro">ADR/SAE reports for patients not enrolled in CEM (Form 3): patients at non-CEM facilities, patients at CEM sites who did not consent to CEM (in Form 1 or at the Day 0 visit), and reports of inadvertent exposure (primaquine given to someone who should not have had it). Events of CEM participants are recorded in Form 2 and appear under Safety (CEM).</p>
   <div class="kpis" id="kpiSpont"></div>
   <div class="grid">
     <div class="card c6"><h3>Reports by week of onset</h3><p class="note">Distinct events by highest intensity</p><div class="chart" id="chSpWeek"></div></div>
@@ -323,6 +323,8 @@ footer{max-width:1400px;margin:0 auto;padding:0 32px 32px;font-size:12.5px;color
       <dt>CEM participant</dt><dd>Given primaquine at a CEM site, enrolled in Form 1 and consenting at Day 0 in Form 2.</dd>
       <dt>Adverse event</dt><dd>Any untoward medical occurrence after primaquine, recorded once per Event ID with later updates. Serious: death, life-threatening, hospitalisation or prolonged hospitalisation, disability, congenital anomaly or other medically important event.</dd>
       <dt>Signs of haemolysis</dt><dd>Dark urine, jaundice or a fall in Hb of 2 g/dL or more between Day 0 and Day 3 (also pallor, fatigue and hospitalisation are tracked).</dd>
+      <dt>Missed Day 3 visit</dt><dd>Recorded in Form 2 with "Did the patient come for the Day 3 visit? No", the reason and a new date. It counts as an unsuccessful attempt, like an unanswered call.</dd>
+      <dt>Inadvertent exposure</dt><dd>Primaquine given to someone who should not have had it (pregnant, breastfeeding a baby under 1, a baby under 1, or allergic). Reported in Form 3, or in Form 2 when a CEM participant finds out she is pregnant.</dd>
       <dt>Lost to follow-up</dt><dd>Two unsuccessful scheduled follow-ups (protocol). The queue lists participants who meet this definition so the team can confirm and record the disposition.</dd>
       <dt>Reporting deadlines</dt><dd>FDA: serious ADRs within 7 days of onset, other ADRs within 28 days.</dd>
       <dt>Scorecard thresholds</dt><dd>Green on target, amber below target, red needs action. Coverage of eligible patients: 90% / 75%. Follow-up completion: 90% / 75%. Enrolment against expected: 90% / 70%. Reporting on time: 95% / 80%.</dd>
@@ -485,6 +487,7 @@ function renderOverview() {
   const late = sum(F("ev_timely", false).filter(r => !r.on_time && r.serious)); if (late) add("b", `${fmtN(late)} serious event(s) reported later than 7 days after onset.`);
   const openOld = sum(F("ev_open", false).filter(r => r.age === "Over 14 days ago")); if (openOld) add("w", `${fmtN(openOld)} unresolved event(s) with no update for more than 14 days.`);
   if (hbd) add("b", `${fmtN(hbd)} participant(s) with a fall in Hb of 2 g/dL or more between Day 0 and Day 3.`);
+  const expo = sum(F("exposure", false)); if (expo) add("b", `${fmtN(expo)} inadvertent exposure(s) to primaquine (for example pregnancy found after treatment). Report and follow up each one.`);
   if (crit) add("b", `${fmtN(crit)} critical data issue(s). See Data quality.`);
   const behind = facs.filter(f => { const e = Math.min(f.target_total, f.target_month * monthsElapsed()); const n = sum(F("enrol_day", false).filter(r => r.f === f.code)); return e >= 5 && n < 0.7 * e; });
   if (behind.length) add("w", `Behind enrolment target (below 70% of expected): ${behind.map(f => f.label).join(", ")}.`);
@@ -693,6 +696,7 @@ function renderSafety() {
     { k: "Serious (SAE)", v: fmtN(sum(ev.filter(r => r.serious))), d: `${fmtN(sum(ev.filter(r => r.hospitalised)))} hospitalised · ${fmtN(sum(ev.filter(r => r.death)))} died`, alarm: sum(ev.filter(r => r.serious)) > 0, alarmText: "Review with the safety team" },
     { k: "Primaquine suspected", v: fmtP(pct(sum(ev.filter(r => r.sus_sldp)), nev)), d: `${fmtN(sum(ev.filter(r => r.sus_sldp)))} of ${fmtN(nev)} events` },
     { k: "Hb fall of 2 g/dL or more", v: fmtN(hbd), d: `${n ? propTxt(hbd, hbp) : "–"} of ${fmtN(hbp)}`, alarm: hbd > 0, alarmText: "Check each case" },
+    { k: "Pregnancy found after primaquine", v: fmtN(sum(F("exposure", false).filter(r => r.src === "cem"))), d: "inadvertent exposure, CEM participants (all dates)", alarm: sum(F("exposure", false).filter(r => r.src === "cem")) > 0, alarmText: "Report and follow the pregnancy" },
     { k: "Mean Hb change Day 0 to 3", v: hbp ? (sum(sf, "hb_sum") / hbp).toFixed(2) + " g/dL" : "–", d: `${fmtN(sum(sf, "haem"))} participants with any sign of haemolysis` }]);
   const ws = weeksOf(ev), ints = ["Mild", "Moderate", "Severe", "Not recorded"].filter(i => ev.some(r => r.intensity === i));
   draw("chEvWeek", barOpt(ws.map(wlab), ints.map(i => ({ name: i, data: ws.map(w => sum(ev.filter(r => r.w === w && r.intensity === i))), itemStyle: { color: INT()[i] } })), { stack: true }));
@@ -747,7 +751,8 @@ function renderSpont() {
     { k: "Serious", v: fmtN(sum(ev.filter(r => r.serious))), d: `${fmtN(sum(ev.filter(r => r.death)))} died`, alarm: sum(ev.filter(r => r.serious)) > 0, alarmText: "Review with the safety team" },
     { k: "Primaquine suspected", v: fmtP(pct(sum(ev.filter(r => r.sus_sldp)), n)) },
     { k: "Resolved", v: fmtP(pct(sum(ev.filter(r => r.resolved)), n)), d: `${fmtN(sum(ev.filter(r => !r.resolved)))} still open` },
-    { k: "Reported on time", v: fmtP(pct(sum(tl.filter(r => r.on_time)), sum(tl))), d: "7 days serious, 28 days other", raw: pct(sum(tl.filter(r => r.on_time)), sum(tl)), t: [95, 80] }]);
+    { k: "Reported on time", v: fmtP(pct(sum(tl.filter(r => r.on_time)), sum(tl))), d: "7 days serious, 28 days other", raw: pct(sum(tl.filter(r => r.on_time)), sum(tl)), t: [95, 80] },
+    { k: "Inadvertent exposure reports", v: fmtN(sum(F("exposure", false).filter(r => r.src === "spont"))), d: "primaquine given to someone who should not have had it", alarm: sum(F("exposure", false).filter(r => r.src === "spont")) > 0, alarmText: "Follow up each one" }]);
   const ws = weeksOf(ev), ints = ["Mild", "Moderate", "Severe", "Not recorded"].filter(i => ev.some(r => r.intensity === i));
   draw("chSpWeek", barOpt(ws.map(wlab), ints.map(i => ({ name: i, data: ws.map(w => sum(ev.filter(r => r.w === w && r.intensity === i))), itemStyle: { color: INT()[i] } })), { stack: true }));
   draw("chSpThrough", rankOpt(by(th, "through"), css("--s4")));
@@ -873,7 +878,7 @@ function renderQueue() {
   const host = $("tbQueue");
   if (!show.length) { host.replaceChildren(el("div", { class: "empty" }, "No one in this part of the queue for the selected sites.")); return; }
   const cols = [["Category", r => r.category], ["Patient ID", r => r.patient_id], ["Name", r => r.name || "–"], ["Phone", r => tel(r.phone)], ["Alternative contact", r => r.alt_name ? `${r.alt_name}` : "–"],
-    ["Alt. phone", r => tel(r.alt_phone)], ["Facility", r => r.facility || "–"], ["Contact", r => r.visit], ["Mode", r => r.mode || "–"], ["Due", r => r.due || "–"], ["Window ends", r => r.window_end || "–"],
+    ["Alt. phone", r => tel(r.alt_phone)], ["Parent / caregiver", r => r.caregiver || "–"], ["Facility", r => r.facility || "–"], ["Contact", r => r.visit], ["Mode", r => r.mode || "–"], ["Due", r => r.due || "–"], ["Window ends", r => r.window_end || "–"],
     ["Days overdue", r => r.days_overdue ? String(r.days_overdue) : "–"], ["Failed calls", r => r.attempts ? String(r.attempts) : "–"], ["Next attempt", r => r.next_attempt || "–"], ["Flags", r => r.flags || ""]];
   const t = el("table"), hr = el("tr"); cols.forEach(([l]) => hr.appendChild(el("th", { class: ["Days overdue", "Failed calls"].includes(l) ? "n" : "" }, l)));
   const th = el("thead"); th.appendChild(hr); t.appendChild(th); const tb = el("tbody");
@@ -881,7 +886,7 @@ function renderQueue() {
       if (l === "Category") { const cls = qBase(r.category) === "Overdue" ? "b" : ["Due now", "Open adverse event", "Meets LTFU definition", "No Day 0 CEM form"].includes(qBase(r.category)) ? "w" : "g"; td.appendChild(el("span", { class: "chip " + cls }, v)); }
       else if (v instanceof Node) td.appendChild(v); else td.textContent = v; tr.appendChild(td); }); tb.appendChild(tr); });
   t.appendChild(tb); host.replaceChildren(t);
-  $("qCsv").onclick = () => { const head = ["category", "patient_id", "name", "phone", "alt_name", "alt_phone", "facility", "district", "visit", "mode", "due", "window_end", "days_overdue", "attempts", "last_attempt", "next_attempt", "flags"];
+  $("qCsv").onclick = () => { const head = ["category", "patient_id", "name", "phone", "alt_name", "alt_phone", "caregiver", "facility", "district", "visit", "mode", "due", "window_end", "days_overdue", "attempts", "last_attempt", "next_attempt", "flags"];
     const esc = v => v == null ? "" : `"${String(v).replace(/"/g, '""')}"`;
     const blob = new Blob([[head.join(",")].concat(show.map(r => head.map(h => esc(r[h])).join(","))).join("\r\n")], { type: "text/csv" });
     const a = el("a", { href: URL.createObjectURL(blob), download: `sldp_queue_${Q.today}.csv` }); document.body.appendChild(a); a.click(); a.remove(); };

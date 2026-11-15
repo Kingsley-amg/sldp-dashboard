@@ -107,7 +107,7 @@ ev_onset <- ev_all |> left_join(day0s, by = "patient_id") |> mutate(day = pmin(p
 ev_open <- ev_all |> filter(!resolved) |>
   count(f, src, serious, age = chr(cut(as.numeric(TODAY - last_record), c(-Inf, 7, 14, Inf), labels = c("Updated in last 7 days", "8-14 days ago", "Over 14 days ago"))), name = "n")
 spont <- adr |> filter(report_type %in% "new") |>
-  count(f = known_fac(facility), through = recode(coalesce(reported_through, "unknown"), cem_site_not_enrolled = "CEM site, not enrolled in CEM",
+  count(f = known_fac(facility), through = recode(coalesce(reported_through, "unknown"), cem_site_not_enrolled = "CEM site, not enrolled in CEM", cem_declined_d0 = "CEM site, declined CEM at Day 0",
                                                   non_cem = "Non-CEM facility", unknown = "Not recorded"), name = "n")
 # Safety cohort cube: lets the page recompute incidence and Hb by subgroup under any filter
 safety_cube <- cohort |> mutate(f = known_fac(facility), age = coalesce(chr(age_group), "Not recorded"), hbg = coalesce(chr(hb_grade_d0), "No Day 0 Hb"),
@@ -115,6 +115,13 @@ safety_cube <- cohort |> mutate(f = known_fac(facility), age = coalesce(chr(age_
   group_by(f, age, sex, hbg, g6) |>
   summarise(n = n(), pdays = round(sum(person_days), 1), ae = sum(any_ae), sae = sum(any_serious), haem = sum(haemolysis),
             hb_pairs = sum(!is.na(hb_change)), hb_drop = sum(hb_drop), hb_sum = round(sum(hb_change, na.rm = TRUE), 2), hosp = sum(hosp_any), .groups = "drop")
+# Inadvertent exposure: pregnancy found after primaquine (CEM, Form 2) and Form 3 exposure reports
+exposure_cube <- bind_rows(
+  cohort |> filter(preg_found) |> transmute(f = known_fac(facility), src = "cem", type = "Pregnant"),
+  exposures |> transmute(f = known_fac(facility), src = "spont", x_types) |> tidyr::separate_rows(x_types, sep = " ") |>
+    transmute(f, src, type = recode(coalesce(x_types, "other"), pregnant = "Pregnant", breastfeeding = "Breastfeeding a baby under 1",
+                                    infant = "Baby under 1 year", allergy = "Known allergy to primaquine", other = "Other contraindication"))) |>
+  count(f, src, type, name = "n")
 hb_hist <- cohort |> filter(!is.na(hb_change)) |> count(f = known_fac(facility), bin = pmax(pmin(ceiling(hb_change * 2) / 2, 3), -5), name = "n")
 hb_grades <- cohort |> filter(!is.na(lab_grade_d0)) |>
   mutate(g3 = case_when(is.na(hb_d3) ~ "No Day 3 Hb", hb_d3 >= 10 ~ "10 g/dL or more", hb_d3 >= 8 ~ "8 to 9.9 g/dL", TRUE ~ "Below 8 g/dL")) |>
@@ -156,25 +163,25 @@ ltfu_ids <- visit_status |> filter(n_missed >= LTFU_MISSED, is.na(exit_status)) 
 q_vis <- visit_status |> filter(status %in% c("Due now", "Overdue", "Upcoming (7 days)"), !patient_id %in% ltfu_ids) |>
   left_join(call_back |> mutate(cb = TRUE), by = c("patient_id", "visit")) |>
   transmute(category = if_else(coalesce(cb, FALSE), paste(status, "(call back)"), status), patient_id, name = trimws(paste(coalesce(first_name, ""), coalesce(last_name, ""))),
-            phone = phone_final, alt_name = alt_contact_name, alt_phone = alt_contact_phone, facility = facility_lbl, district = district_lbl,
+            phone = phone_final, alt_name = alt_contact_name, alt_phone = alt_contact_phone, caregiver = if_else(!is.na(caregiver_name) & caregiver_name != "", paste0(caregiver_name, if_else(!is.na(caregiver_relation), paste0(" (", caregiver_relation, ")"), "")), NA_character_), facility = facility_lbl, district = district_lbl,
             visit = label, mode, due = format(due), window_end = format(window_end), days_overdue, attempts = n_fail, last_attempt = format(last_attempt),
             next_attempt = format(next_attempt), missed = n_missed,
             flags = paste0(if_else(any_serious, "Serious AE; ", ""), if_else(hb_drop, "Hb fall of 2+; ", ""), if_else(n_missed >= 1, paste0(n_missed, " missed contact(s); "), "")))
-pinfo <- reg |> select(patient_id, first_name, last_name, phone_final, alt_contact_name, alt_contact_phone, facility_lbl, district_lbl)
+pinfo <- reg |> select(patient_id, first_name, last_name, phone_final, alt_contact_name, alt_contact_phone, caregiver_name, caregiver_relation, facility_lbl, district_lbl)
 q_ev <- cem_events |> filter(!resolved) |> left_join(pinfo, by = "patient_id") |>
   transmute(category = "Open adverse event", patient_id, name = trimws(paste(coalesce(first_name, ""), coalesce(last_name, ""))), phone = phone_final,
-            alt_name = alt_contact_name, alt_phone = alt_contact_phone, facility = facility_lbl, district = district_lbl,
+            alt_name = alt_contact_name, alt_phone = alt_contact_phone, caregiver = if_else(!is.na(caregiver_name) & caregiver_name != "", paste0(caregiver_name, if_else(!is.na(caregiver_relation), paste0(" (", caregiver_relation, ")"), "")), NA_character_), facility = facility_lbl, district = district_lbl,
             visit = paste0("Update event ", event_id, " (", intensity, if_else(serious, ", serious", ""), ")"), mode = "Form 2 update",
             due = format(last_record + 7), window_end = NA_character_, days_overdue = pmax(as.numeric(TODAY - (last_record + 7)), 0), attempts = NA_integer_,
             last_attempt = format(last_record), next_attempt = NA_character_, missed = NA_integer_, flags = if_else(serious, "Serious AE; ", ""))
 q_d0 <- cohort |> filter(!coalesce(d0_done, FALSE)) |>
   transmute(category = "No Day 0 CEM form", patient_id, name = trimws(paste(coalesce(first_name, ""), coalesce(last_name, ""))), phone = phone_final,
-            alt_name = alt_contact_name, alt_phone = alt_contact_phone, facility = facility_lbl, district = district_lbl, visit = "Day 0", mode = "In person",
+            alt_name = alt_contact_name, alt_phone = alt_contact_phone, caregiver = if_else(!is.na(caregiver_name) & caregiver_name != "", paste0(caregiver_name, if_else(!is.na(caregiver_relation), paste0(" (", caregiver_relation, ")"), "")), NA_character_), facility = facility_lbl, district = district_lbl, visit = "Day 0", mode = "In person",
             due = format(day0), window_end = format(day0 + 1), days_overdue = pmax(as.numeric(TODAY - day0 - 1), 0), attempts = 0L,
             last_attempt = NA_character_, next_attempt = NA_character_, missed = 0L, flags = "")
 q_ltfu <- visit_status |> filter(n_missed >= LTFU_MISSED, is.na(exit_status)) |> distinct(patient_id, .keep_all = TRUE) |>
   transmute(category = "Meets LTFU definition", patient_id, name = trimws(paste(coalesce(first_name, ""), coalesce(last_name, ""))), phone = phone_final,
-            alt_name = alt_contact_name, alt_phone = alt_contact_phone, facility = facility_lbl, district = district_lbl,
+            alt_name = alt_contact_name, alt_phone = alt_contact_phone, caregiver = if_else(!is.na(caregiver_name) & caregiver_name != "", paste0(caregiver_name, if_else(!is.na(caregiver_relation), paste0(" (", caregiver_relation, ")"), "")), NA_character_), facility = facility_lbl, district = district_lbl,
             visit = "Confirm and record the disposition in Form 2", mode = "Telephone", due = NA_character_, window_end = NA_character_, days_overdue = NA_real_,
             attempts = NA_integer_, last_attempt = NA_character_, next_attempt = NA_character_, missed = n_missed, flags = paste0(n_missed, " missed contacts; "))
 q_order <- c("Overdue", "Due now", "Open adverse event", "No Day 0 CEM form", "Meets LTFU definition", "Upcoming (7 days)")
@@ -197,14 +204,14 @@ out <- list(
                               other_days = OTHER_REPORT_D, ltfu_missed = LTFU_MISSED),
               visit_schedule = cols(VISIT_SCHEDULE),
               counts = list(registered = nrow(reg), cohort = nrow(cohort), contacts = nrow(visits), cem_events = nrow(cem_events),
-                            spont_reports = nrow(adr), spont_events = nrow(adr_events), queue = nrow(queue))),
+                            spont_reports = nrow(adr), spont_events = nrow(adr_events), exposures = nrow(exposures) + sum(cohort$preg_found), queue = nrow(queue))),
   facilities = cols(facilities),
   reg = cols(reg_cube), not_elig = cols(not_elig), refusal = cols(refusal), not_disp = cols(not_disp), tests = cols(tests), act = cols(act_cube),
   dose_basis = cols(dose_basis), dose_band = cols(dose_band), mgkg_hist = cols(mgkg_hist), enrol_day = cols(enrol_day),
   fu = cols(fu_cube), fu_time = cols(fu_time), overdue_age = cols(overdue_age), calls = cols(calls), attempts = cols(attempts_needed),
   contacts_week = cols(contacts_week), exits = cols(exits_cube), consent = cols(consent_cube),
   ev = cols(ev_cube), ev_signs = cols(ev_signs), ev_crit = cols(ev_crit), ev_timely = cols(ev_timely), ev_onset = cols(ev_onset), ev_open = cols(ev_open),
-  spont = cols(spont), safety = cols(safety_cube), hb_hist = cols(hb_hist), hb_grades = cols(hb_grades), symptoms = cols(symptoms),
+  spont = cols(spont), exposure = cols(exposure_cube), safety = cols(safety_cube), hb_hist = cols(hb_hist), hb_grades = cols(hb_grades), symptoms = cols(symptoms),
   queue = cols(queue_cube),
   analysis = analysis_out,
   dq = cols(dq), subs_week = cols(subs_week), entry_lag = cols(entry_lag), completeness = cols(completeness), versions = cols(versions))
