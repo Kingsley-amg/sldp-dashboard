@@ -1,6 +1,6 @@
-# Pulls the SLDP Kobo forms, rebuilds the aggregate dashboard data and
-# publishes docs/ to GitHub Pages. Runs every 6 hours, on every push to main,
-# and on demand (Actions > Update SLDP dashboard > Run workflow).
+# Pulls the SLDP Kobo forms, rebuilds the dashboard data and the encrypted
+# patient queue, and publishes docs/ to GitHub Pages. Runs every 6 hours, on
+# every push to main, and on demand (Actions > Update SLDP dashboard > Run workflow).
 name: Update SLDP dashboard
 
 on:
@@ -54,16 +54,33 @@ jobs:
             any::stringr
             any::tibble
             any::lubridate
-            any::lme4
             any::survival
 
-      - name: Pull Kobo data and build aggregates
+      - uses: actions/setup-node@v4
+        if: steps.token.outputs.live == 'true'
+        with:
+          node-version: 20
+
+      - name: Pull Kobo data and build the dashboard data
         if: steps.token.outputs.live == 'true'
         env:
           KOBO_TOKEN: ${{ secrets.KOBO_TOKEN }}
-          SLDP_RAW_DIR: ${{ runner.temp }}/sldp_raw     # raw records never enter the published folder
-          SLDP_INCLUDE_TEST: ${{ vars.SLDP_INCLUDE_TEST }}  # repository variable; "true" shows training (TEST) records
+          SLDP_RAW_DIR: ${{ runner.temp }}/sldp_raw          # raw records and the plain queue never enter docs/
+          SLDP_INCLUDE_TEST: ${{ vars.SLDP_INCLUDE_TEST }}   # repository variable; "true" shows training (TEST) records
+          SLDP_PILOT_START: ${{ vars.SLDP_PILOT_START }}     # repository variable, e.g. 2026-10-01 (optional)
         run: Rscript R/build_dashboard_data.R
+
+      - name: Encrypt the patient queue
+        if: steps.token.outputs.live == 'true'
+        env:
+          QUEUE_PASSWORD: ${{ secrets.QUEUE_PASSWORD }}
+        run: node tools/encrypt_queue.mjs "${{ runner.temp }}/sldp_raw/queue.json" docs/data/queue.enc.json
+
+      - name: Make sure no plain patient data is published
+        run: |
+          if grep -rlE 'GA-[0-9A-F]{8}' docs/ --include='*.json' | grep -v 'queue.enc.json'; then
+            echo "::error::Patient IDs found in docs/. Not publishing."; exit 1; fi
+          test ! -e docs/data/queue.json
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

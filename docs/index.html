@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SLDP Pilot Dashboard</title>
-<meta name="description" content="Monitoring and analysis dashboard for the single low-dose primaquine (SLDP) pilot, Greater Accra. Aggregate figures only.">
+<meta name="description" content="Monitoring and analysis dashboard for the single low-dose primaquine (SLDP) pilot and cohort event monitoring, Greater Accra.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
@@ -13,121 +13,143 @@
   color-scheme:light;
   --page:#f3f1ec; --surface:#fcfcfb; --surface-2:#f0efec; --border:#e2e0da; --hair:#ebe9e4;
   --ink:#0b0b0b; --ink-2:#52514e; --ink-3:#7c7b76; --head:#1c2b36; --head-ink:#f3f1ec; --head-ink-2:#b9c7d1;
-  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --neutral:#c3c2b7; --neutral-2:#8a8986;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#8b5cc7; --neutral:#c3c2b7; --neutral-2:#8a8986;
   --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
   --seq1:#b7d3f6; --seq2:#6da7ec; --seq3:#2a78d6; --seq4:#184f95;
-  --chip-good:#e3f3e3; --chip-warn:#fdf1d6; --chip-bad:#f8e1e1; --callout:#eef4fb;
+  --chip-good:#e3f3e3; --chip-warn:#fdf1d6; --chip-bad:#f8e1e1; --callout:#eef4fb; --alert:#fbeaea;
 }
 @media (prefers-color-scheme: dark){
-  :root:where(:not([data-theme="light"])){
+  :root:not([data-theme="light"]){
     color-scheme:dark;
     --page:#121211; --surface:#1a1a19; --surface-2:#242422; --border:#33332f; --hair:#2a2a27;
     --ink:#f0efec; --ink-2:#c3c2b7; --ink-3:#8f8e87; --head:#0f1a22; --head-ink:#f0efec; --head-ink-2:#9fb3c2;
-    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --neutral:#55554f; --neutral-2:#77766f;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#9b72d6; --neutral:#55554f; --neutral-2:#77766f;
     --seq1:#184f95; --seq2:#256abf; --seq3:#5598e7; --seq4:#9ec5f4;
-    --chip-good:#173317; --chip-warn:#3a2f12; --chip-bad:#3d1c1c; --callout:#16263a;
+    --chip-good:#173317; --chip-warn:#3a2f12; --chip-bad:#3d1c1c; --callout:#16263a; --alert:#331b1b;
   }
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
   --page:#121211; --surface:#1a1a19; --surface-2:#242422; --border:#33332f; --hair:#2a2a27;
   --ink:#f0efec; --ink-2:#c3c2b7; --ink-3:#8f8e87; --head:#0f1a22; --head-ink:#f0efec; --head-ink-2:#9fb3c2;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --neutral:#55554f; --neutral-2:#77766f;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#9b72d6; --neutral:#55554f; --neutral-2:#77766f;
   --seq1:#184f95; --seq2:#256abf; --seq3:#5598e7; --seq4:#9ec5f4;
-  --chip-good:#173317; --chip-warn:#3a2f12; --chip-bad:#3d1c1c; --callout:#16263a;
+  --chip-good:#173317; --chip-warn:#3a2f12; --chip-bad:#3d1c1c; --callout:#16263a; --alert:#331b1b;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--page);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,sans-serif}
 header{background:var(--head);color:var(--head-ink);padding:28px 32px 0}
-.hwrap{max-width:1360px;margin:0 auto}
+.hwrap{max-width:1400px;margin:0 auto}
 .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#e3b796;margin:0 0 6px}
 h1{font-family:"Source Serif 4",Georgia,serif;font-weight:600;font-size:30px;line-height:1.15;margin:0}
 .sub{color:var(--head-ink-2);margin:6px 0 0;font-size:14px}
 .meta{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:12px;font-size:13px;color:var(--head-ink-2)}
 .meta b{color:var(--head-ink);font-weight:500}
 nav{display:flex;gap:2px;margin-top:20px;overflow-x:auto;scrollbar-width:none}
-nav button{background:none;border:0;color:var(--head-ink-2);font:500 14px "IBM Plex Sans",sans-serif;padding:11px 16px;border-radius:8px 8px 0 0;cursor:pointer;white-space:nowrap}
+nav button{background:none;border:0;color:var(--head-ink-2);font:500 14px "IBM Plex Sans",sans-serif;padding:11px 14px;border-radius:8px 8px 0 0;cursor:pointer;white-space:nowrap}
 nav button:hover{color:var(--head-ink)}
 nav button[aria-selected="true"]{background:var(--page);color:var(--ink)}
+nav button .lock{font-size:11px;opacity:.75;margin-left:4px}
 .demo{background:#fdf1d6;color:#5b4300;border-bottom:1px solid #f0d58c;padding:9px 32px;font-size:13.5px;text-align:center}
-.filters{max-width:1360px;margin:0 auto;padding:18px 32px 4px;display:flex;flex-wrap:wrap;gap:12px;align-items:end}
-.filters label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-2);font-weight:500}
-select{font:14px "IBM Plex Sans",sans-serif;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 30px 7px 10px;min-width:150px;max-width:100%;appearance:none;
-  background-image:linear-gradient(45deg,transparent 50%,var(--ink-2) 50%),linear-gradient(135deg,var(--ink-2) 50%,transparent 50%);background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px;background-repeat:no-repeat}
+.filters{max-width:1400px;margin:0 auto;padding:18px 32px 4px;display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.filters label,.qbar label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-2);font-weight:500}
+select,input[type=search],input[type=password]{font:14px "IBM Plex Sans",sans-serif;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px;min-width:150px;max-width:100%}
+select{padding-right:30px;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-2) 50%),linear-gradient(135deg,var(--ink-2) 50%,transparent 50%);background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px;background-repeat:no-repeat}
 .btn{font:500 13px "IBM Plex Sans",sans-serif;border:1px solid var(--border);background:var(--surface);color:var(--ink-2);border-radius:8px;padding:8px 12px;cursor:pointer}
-.btn:hover{color:var(--ink)}
+.btn:hover{color:var(--ink)} .btn.primary{background:var(--s1);border-color:var(--s1);color:#fff}
 .scope{font-size:12.5px;color:var(--ink-3);margin-left:auto;align-self:center}
-main{max-width:1360px;margin:0 auto;padding:12px 32px 48px}
-section.tab{display:none}
-section.tab.on{display:block}
-.intro{color:var(--ink-2);max-width:900px;margin:6px 0 18px;text-align:justify}
-h2{font-family:"Source Serif 4",Georgia,serif;font-weight:600;font-size:22px;margin:22px 0 4px}
+main{max-width:1400px;margin:0 auto;padding:12px 32px 48px}
+section.tab{display:none} section.tab.on{display:block}
+.intro{color:var(--ink-2);max-width:960px;margin:6px 0 18px}
+h2{font-family:"Source Serif 4",Georgia,serif;font-weight:600;font-size:21px;margin:26px 0 10px}
 .grid{display:grid;gap:16px;grid-template-columns:repeat(12,1fr)}
 .c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}.c7{grid-column:span 7}.c8{grid-column:span 8}.c12{grid-column:span 12}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;min-width:0}
 .card h3{font-size:15px;font-weight:600;margin:0}
 .card .note{font-size:12.5px;color:var(--ink-3);margin:2px 0 8px}
-.tag{display:inline-block;font-size:11px;font-weight:500;color:var(--ink-3);border:1px solid var(--border);border-radius:99px;padding:0 8px;margin-left:6px;vertical-align:2px}
-.chart{width:100%;height:320px}
-.chart.tall{height:460px}.chart.short{height:250px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:12px;margin-bottom:16px}
+.tag{display:inline-block;font-size:11px;font-weight:500;color:var(--ink-3);border:1px solid var(--border);border-radius:99px;padding:0 8px;margin-left:6px;vertical-align:1px}
+.chart{width:100%;height:320px} .chart.tall{height:440px} .chart.short{height:250px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(186px,1fr));gap:12px;margin-bottom:16px}
 .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
 .kpi .k{font-size:12.5px;color:var(--ink-2);margin:0}
-.kpi .v{font-size:28px;font-weight:600;line-height:1.2;margin:4px 0 0;font-variant-numeric:tabular-nums}
+.kpi .v{font-size:27px;font-weight:600;line-height:1.2;margin:4px 0 0;font-variant-numeric:tabular-nums}
 .kpi .d{font-size:12px;color:var(--ink-3);margin:2px 0 0}
 .kpi .st{font-size:12px;font-weight:500;margin-top:6px;display:inline-flex;gap:5px;align-items:center}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
 table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
-th{font-weight:600;text-align:left;color:var(--ink-2);border-bottom:1px solid var(--border);padding:8px 10px;white-space:nowrap;position:sticky;top:0;background:var(--surface);cursor:default}
-th.sort{cursor:pointer}th.sort:hover{color:var(--ink)}
+th{font-weight:600;text-align:left;color:var(--ink-2);border-bottom:1px solid var(--border);padding:8px 10px;white-space:nowrap;position:sticky;top:0;background:var(--surface);z-index:1}
+th.sort{cursor:pointer} th.sort:hover{color:var(--ink)}
 td{padding:7px 10px;white-space:nowrap;border-bottom:1px solid var(--hair);vertical-align:top}
-td.n,th.n{text-align:right}
+td.n,th.n{text-align:right} td.wrap{white-space:normal;min-width:200px}
 tr:hover td{background:var(--surface-2)}
-.twrap{overflow:auto;max-height:520px}
+tr.total td{font-weight:600;border-top:1px solid var(--border)}
+.twrap{overflow:auto;max-height:540px}
 .chip{display:inline-block;border-radius:6px;padding:1px 7px;font-size:12.5px;font-weight:500}
 .chip.g{background:var(--chip-good)}.chip.w{background:var(--chip-warn)}.chip.b{background:var(--chip-bad)}.chip.na{color:var(--ink-3)}
-.legend-note{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:8px}
+.alerts{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.alerts li{display:flex;gap:10px;align-items:flex-start;font-size:14px;padding:9px 12px;border-radius:10px;background:var(--surface-2)}
+.alerts li.b{background:var(--alert)} .alerts li .dot{margin-top:7px;flex:none}
 .acard{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:16px}
 .acard .obj{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--s1);font-weight:600}
 .acard h3{font-size:17px;margin:4px 0 2px}
 .acard .method{font-size:13px;color:var(--ink-2);margin:0 0 12px}
-.acard .finding{background:var(--callout);border-radius:10px;padding:10px 14px;font-size:14px;margin-top:12px;text-align:justify}
-.acard .pending{color:var(--ink-3);font-style:italic}
-.agrid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}
-.defs dt{font-weight:600;margin-top:12px}
-.defs dd{margin:2px 0 0;color:var(--ink-2);text-align:justify}
-footer{max-width:1360px;margin:0 auto;padding:0 32px 32px;font-size:12.5px;color:var(--ink-3)}
+.acard .finding{background:var(--callout);border-radius:10px;padding:10px 14px;font-size:14px;margin-top:12px}
+.acard .pending{color:var(--ink-3);font-style:italic;margin:0}
+.agrid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:20px;align-items:start}
+.objnav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
+.objnav a{font-size:13px;color:var(--ink-2);text-decoration:none;border:1px solid var(--border);background:var(--surface);border-radius:99px;padding:4px 12px}
+.objnav a:hover{color:var(--ink)}
+.objbox{background:var(--callout);border-radius:14px;padding:16px 20px;margin-bottom:18px}
+.objbox ol{margin:6px 0 0;padding-left:20px} .objbox li{margin:3px 0}
+.defs dt{font-weight:600;margin-top:12px} .defs dd{margin:2px 0 0;color:var(--ink-2)}
+footer{max-width:1400px;margin:0 auto;padding:0 32px 32px;font-size:12.5px;color:var(--ink-3)}
 .empty{color:var(--ink-3);font-size:13.5px;padding:30px 0;text-align:center}
+.lockbox{max-width:460px;margin:40px auto;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:26px 28px}
+.lockbox h3{margin:0 0 6px;font-size:18px} .lockbox p{color:var(--ink-2);font-size:14px;margin:0 0 14px}
+.lockbox form{display:flex;gap:8px} .lockbox input{flex:1}
+.err{color:var(--critical);font-size:13px;margin-top:10px;min-height:18px}
+.qbar{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:14px}
+.qchips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.qchip{border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:8px 12px;font-size:13px;cursor:pointer;text-align:left;color:var(--ink)}
+.qchip b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.qchip[aria-pressed="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+.qtable td a{color:var(--s1);text-decoration:none} .qtable td a:hover{text-decoration:underline}
+.private{font-size:12.5px;color:var(--ink-3);margin-top:10px}
 @media (max-width:1000px){.c3,.c4,.c5{grid-column:span 6}.c6,.c7,.c8{grid-column:span 12}.agrid{grid-template-columns:1fr}}
 @media (max-width:640px){header{padding:20px 16px 0}.filters,main,footer{padding-left:16px;padding-right:16px}.demo{padding:9px 16px}
-  .c3,.c4,.c5,.c6{grid-column:span 12}h1{font-size:24px}.scope{margin-left:0}.kpi .v{font-size:24px}select{min-width:130px}}
+  .c3,.c4,.c5,.c6{grid-column:span 12}h1{font-size:24px}.scope{margin-left:0}.kpi .v{font-size:23px}select{min-width:130px}}
+@media print{header nav,.filters,.btn{display:none}body{background:#fff}}
 </style>
 </head>
 <body>
 <header>
   <div class="hwrap">
-    <p class="eyebrow">Greater Accra · Single low-dose primaquine pilot</p>
+    <p class="eyebrow">Greater Accra · Single low-dose primaquine pilot · Cohort event monitoring</p>
     <h1>SLDP Pilot Monitoring Dashboard</h1>
-    <p class="sub">Registration, cohort event monitoring (CEM) and ADR/SAE reporting · Developed by Kingsley Amegah, Data Scientist / Health Data Specialist</p>
+    <p class="sub">Patient Register (Form 1), CEM Form Days 0 to 28 (Form 2) and ADR/SAE reports for patients not enrolled in CEM (Form 3) · Developed by Kingsley Amegah, Data Scientist / Health Data Specialist</p>
     <div class="meta" id="meta"></div>
     <nav role="tablist" id="tabs">
       <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
-      <button role="tab" data-tab="coverage">Coverage and dosing</button>
+      <button role="tab" data-tab="enrolment">Enrolment vs targets</button>
+      <button role="tab" data-tab="cascade">Screening and treatment</button>
+      <button role="tab" data-tab="dosing">Dosing</button>
       <button role="tab" data-tab="followup">Follow-up</button>
-      <button role="tab" data-tab="safety">Safety</button>
-      <button role="tab" data-tab="quality">Data quality</button>
+      <button role="tab" data-tab="safety">Safety (CEM)</button>
+      <button role="tab" data-tab="spont">Spontaneous reports</button>
       <button role="tab" data-tab="analysis">Statistical analysis</button>
-      <button role="tab" data-tab="methods">Methods and definitions</button>
+      <button role="tab" data-tab="quality">Data quality</button>
+      <button role="tab" data-tab="queue">Patient queue<span class="lock">locked</span></button>
+      <button role="tab" data-tab="methods">Methods</button>
     </nav>
   </div>
 </header>
-<div class="demo" id="demo" hidden>Demonstration data. These figures come from simulated records and will be replaced automatically by live pilot data after the first scheduled update.</div>
+<div class="demo" id="demo" hidden>Demonstration data. These figures come from simulated records and will be replaced automatically by live pilot data after the next scheduled update.</div>
 <div class="demo" id="trainNote" hidden></div>
 
 <div class="filters" id="filters">
   <label>Period<select id="fPeriod">
-    <option value="all">Whole pilot</option><option value="4">Last 4 weeks</option><option value="8">Last 8 weeks</option><option value="12">Last 12 weeks</option></select></label>
+    <option value="all">Whole pilot</option><option value="1">This week</option><option value="2">Last 2 weeks</option><option value="4">Last 4 weeks</option><option value="8">Last 8 weeks</option><option value="12">Last 12 weeks</option></select></label>
   <label>District<select id="fDistrict"></select></label>
   <label>Facility<select id="fFacility"></select></label>
   <label>Site type<select id="fSite"><option value="all">All sites</option><option value="cem">CEM sites</option><option value="non">Non-CEM sites</option></select></label>
@@ -139,91 +161,178 @@ footer{max-width:1360px;margin:0 auto;padding:0 32px 32px;font-size:12.5px;color
 <main>
 <!-- ============ OVERVIEW ============ -->
 <section class="tab on" id="t-overview">
-  <p class="intro">A summary of pilot performance for the selected period and sites. Registration figures follow the period filter. Follow-up, safety and data-quality figures describe the current position of every patient at the selected sites.</p>
+  <p class="intro">Where the pilot stands today for the selected sites and period: enrolment, treatment, follow-up, safety and the work waiting for the CEM teams. Registration and safety counts follow the period filter; follow-up status always describes today's position.</p>
   <div class="kpis" id="kpiOverview"></div>
   <div class="grid">
-    <div class="card c7"><h3>Weekly registrations</h3><p class="note">Patients registered per week, split by CEM enrolment</p><div class="chart" id="chRegWeek"></div></div>
-    <div class="card c5"><h3>SLDP coverage trend</h3><p class="note">Percentage of eligible patients given SLDP, by registration week</p><div class="chart" id="chCovWeek"></div></div>
-    <div class="card c12"><h3>Facility scorecard</h3><p class="note">Every pilot facility, including sites that have not submitted yet (shown with 0). Click a column heading to sort. Status thresholds are explained in Methods and definitions.</p><div class="twrap" id="tbScore"></div></div>
+    <div class="card c5"><h3>Needs attention</h3><p class="note">Generated from today's data</p><ul class="alerts" id="alerts"></ul></div>
+    <div class="card c7"><h3>CEM enrolment against the protocol target</h3><p class="note">Cumulative participants enrolled in CEM; dashed line: target of 1,500 over 5 months (302 per month)<span class="tag">All dates</span></p><div class="chart" id="chEnrolCum"></div></div>
+    <div class="card c7"><h3>Weekly registrations and treatment</h3><p class="note">Patients registered, given primaquine and enrolled in CEM, by week of registration</p><div class="chart" id="chRegWeek"></div></div>
+    <div class="card c5"><h3>Follow-up queue today</h3><p class="note">Scheduled contacts by visit. Names and phone numbers are in the locked Patient queue tab.</p><div class="chart" id="chQueue"></div></div>
+    <div class="card c12"><h3>Facility scorecard</h3><p class="note">Every pilot facility. Click a column heading to sort. Thresholds are in Methods.</p><div class="twrap" id="tbScore"></div></div>
   </div>
 </section>
 
-<!-- ============ COVERAGE ============ -->
-<section class="tab" id="t-coverage">
-  <p class="intro">Objective 1 to 3: whether eligible patients receive SLDP, why some do not, and whether screening and dosing follow the protocol (0.25 mg base per kg, accepted range 0.15 to 0.4 mg/kg, maximum 15 mg).</p>
-  <div class="kpis" id="kpiCoverage"></div>
+<!-- ============ ENROLMENT ============ -->
+<section class="tab" id="t-enrolment">
+  <p class="intro">Enrolment at the 10 CEM sites against the protocol targets: 1,500 participants over 5 months of enrolment (about 302 a month), followed by 1 month of follow-up. "Expected by today" is the monthly target multiplied by the months elapsed since the pilot started.</p>
+  <div class="kpis" id="kpiEnrol"></div>
   <div class="grid">
-    <div class="card c6"><h3>Coverage by facility</h3><p class="note">Eligible patients given SLDP; label shows given / eligible</p><div class="chart tall" id="chCovFac"></div></div>
-    <div class="card c6"><h3>Coverage by age group and sex</h3><p class="note">Eligible patients given SLDP<span class="tag">All dates</span></p><div class="chart tall" id="chCovGroup"></div></div>
-    <div class="card c6"><h3>Reasons SLDP was not given</h3><p class="note">Patients not given SLDP<span class="tag">All dates</span></p><div class="chart" id="chReasons"></div></div>
-    <div class="card c6"><h3>Reasons patients refused</h3><p class="note">More than one reason allowed<span class="tag">All dates</span></p><div class="chart" id="chRefusal"></div></div>
-    <div class="card c12"><h3>Dose received per kilogram</h3><p class="note">Shaded band: accepted range 0.15 to 0.4 mg/kg; dashed line: 0.25 mg/kg target<span class="tag">All dates</span></p><div class="chart" id="chDose"></div></div>
+    <div class="card c7"><h3>Enrolled against expected, by CEM site</h3><p class="note">Bars: enrolled so far; marker: expected by today<span class="tag">All dates</span></p><div class="chart tall" id="chSiteTarget"></div></div>
+    <div class="card c5"><h3>Monthly enrolment against the monthly target</h3><p class="note">Participants enrolled per calendar month, all selected CEM sites<span class="tag">All dates</span></p><div class="chart tall" id="chMonthly"></div></div>
+    <div class="card c12"><h3>Site targets and projection</h3><p class="note">Projection at 5 months assumes each site keeps its average daily pace of the last 28 days</p><div class="twrap" id="tbTargets"></div></div>
+  </div>
+</section>
+
+<!-- ============ CASCADE ============ -->
+<section class="tab" id="t-cascade">
+  <p class="intro">From registration to CEM enrolment: who was tested, who had P. falciparum, who passed the eligibility screen, and where patients left the SLDP pathway, with the reasons recorded.</p>
+  <div class="kpis" id="kpiCascade"></div>
+  <div class="grid">
+    <div class="card c7"><h3>Treatment cascade</h3><p class="note">Each bar is a subset of the bar above it</p><div class="chart" id="chCascade"></div></div>
+    <div class="card c5"><h3>Why patients were not eligible</h3><p class="note">First exclusion criterion met, in screening order</p><div class="chart" id="chNotElig"></div></div>
+    <div class="card c6"><h3>Why eligible patients declined primaquine</h3><p class="note">More than one reason allowed</p><div class="chart" id="chRefusal"></div></div>
+    <div class="card c6"><h3>Why treatment was not dispensed</h3><p class="note">ACT not dispensed to eligible patients, or primaquine accepted but not dispensed</p><div class="chart" id="chNotDisp"></div></div>
+    <div class="card c6"><h3>Testing and positivity</h3><p class="note">Tests done and P. falciparum positive, by test type</p><div class="chart" id="chTests"></div></div>
+    <div class="card c6"><h3>Patients by age group and sex</h3><p class="note">Registered patients and primaquine given</p><div class="chart" id="chAgeSex"></div></div>
+    <div class="card c12"><h3>Cascade by facility</h3><div class="twrap" id="tbCascade"></div></div>
+  </div>
+</section>
+
+<!-- ============ DOSING ============ -->
+<section class="tab" id="t-dosing">
+  <p class="intro">Whether primaquine was dosed by the weight table, given under direct observation, and with counselling. A dose that matches neither the SLDP weight table nor the ACT table is flagged in Form 1 and must be confirmed by the officer.</p>
+  <div class="kpis" id="kpiDosing"></div>
+  <div class="grid">
+    <div class="card c6"><h3>Which dosing table the dose followed</h3><div class="chart" id="chBasis"></div></div>
+    <div class="card c6"><h3>Dose received per kilogram</h3><p class="note">mg of primaquine base per kg of body weight; dashed line at the 0.25 mg/kg reference<span class="tag">Period filter does not apply</span></p><div class="chart" id="chMgkg"></div></div>
+    <div class="card c7"><h3>Dose given by weight band</h3><p class="note">Tablet fraction dispensed in each weight band<span class="tag">Period filter does not apply</span></p><div class="chart" id="chDoseBand"></div></div>
+    <div class="card c5"><h3>ACT dispensed</h3><div class="chart" id="chAct"></div></div>
+    <div class="card c12"><h3>Dosing practice by facility</h3><div class="twrap" id="tbDosing"></div></div>
   </div>
 </section>
 
 <!-- ============ FOLLOW-UP ============ -->
 <section class="tab" id="t-followup">
-  <p class="intro">Objective 5: whether CEM-enrolled patients are seen on schedule (Day 0 and Day 3 in person; Day 7, 14 and 28 by telephone). Status is calculated against today's date with a grace window for each visit.</p>
+  <p class="intro">Whether CEM participants are seen on schedule: Day 0 and Day 3 in person, Day 7, 14 and 28 by telephone. Each visit has a grace window (Day 0: 1 day, Day 3: 2, Day 7: 3, Day 14: 3, Day 28: 5). A visit still pending when the next one falls due counts as missed; 2 missed scheduled contacts meet the protocol definition of lost to follow-up. Period filter: week of Day 0.</p>
   <div class="kpis" id="kpiFollow"></div>
   <div class="grid">
-    <div class="card c7"><h3>Follow-up status by scheduled visit</h3><p class="note">Every expected visit for enrolled patients</p><div class="chart" id="chFollow"></div></div>
-    <div class="card c5"><h3>How long overdue visits have waited</h3><p class="note">Days past the end of the grace window</p><div class="chart" id="chOverdue"></div></div>
-    <div class="card c7"><h3>Completed visits per week</h3><p class="note">Follow-up activity by week of visit</p><div class="chart" id="chVisitWeek"></div></div>
-    <div class="card c5"><h3>Telephone contact outcomes</h3><p class="note">All call attempts, Day 7, 14, 28 and unscheduled</p><div class="chart" id="chPhone"></div></div>
-    <div class="card c12"><h3>Completion and timeliness by visit</h3><p class="note">Visits that are due (completed, due now or overdue)</p><div class="twrap" id="tbFollow"></div></div>
+    <div class="card c7"><h3>Status of every scheduled contact</h3><p class="note">CEM participants who consented, by visit</p><div class="chart" id="chFollow"></div></div>
+    <div class="card c5"><h3>Participant status</h3><p class="note">Completed, in follow-up, exited, or meeting the loss-to-follow-up definition</p><div class="chart" id="chExits"></div></div>
+    <div class="card c6"><h3>Telephone call outcomes</h3><p class="note">Every call attempt for Day 7, 14 and 28, by week of the call</p><div class="chart" id="chCalls"></div></div>
+    <div class="card c6"><h3>Calls needed to reach the participant</h3><p class="note">Per participant and visit<span class="tag">Period filter does not apply</span></p><div class="chart" id="chAttempts"></div></div>
+    <div class="card c6"><h3>Timeliness of completed contacts</h3><p class="note">Completed within the grace window, late or early<span class="tag">Period filter does not apply</span></p><div class="chart" id="chTiming"></div></div>
+    <div class="card c6"><h3>How long pending contacts have waited</h3><p class="note">Days past the end of the grace window (overdue and missed)<span class="tag">Period filter does not apply</span></p><div class="chart" id="chOverdue"></div></div>
+    <div class="card c12"><h3>Completion by facility and visit</h3><p class="note">Completed / due (completed, due now, overdue or missed). Exited participants are not counted as due.</p><div class="twrap" id="tbFollow"></div></div>
   </div>
 </section>
 
 <!-- ============ SAFETY ============ -->
 <section class="tab" id="t-safety">
-  <p class="intro">Objective 4: adverse events (AEs), serious adverse events (SAEs), haemoglobin change and signs of haemolysis. Events are counted once per Event ID, using the latest update for outcome and the highest recorded intensity.</p>
+  <p class="intro">Adverse events recorded for CEM participants in Form 2. Each event is counted once by its Event ID, using the highest recorded intensity and the latest outcome. Incidence uses participants as the denominator and person-days of follow-up for the rate. The subgroup table recalculates for the selected sites and period.</p>
   <div class="kpis" id="kpiSafety"></div>
   <div class="grid">
-    <div class="card c7"><h3>Adverse events by week of onset</h3><p class="note">Distinct events, by highest intensity</p><div class="chart" id="chEvents"></div></div>
-    <div class="card c5"><h3>Adverse event incidence in the CEM cohort</h3><p class="note">Patients with at least one event, by SLDP status</p><div class="chart" id="chIncidence"></div></div>
-    <div class="card c6"><h3>Haemoglobin change, Day 0 to Day 3</h3><p class="note">Patients with both values; red bars are a fall of 2 g/dL or more</p><div class="chart" id="chHb"></div></div>
-    <div class="card c6"><h3>Symptoms reported at telephone follow-up</h3><p class="note">Percentage of reached patients answering yes</p><div class="chart" id="chSymptoms"></div></div>
-    <div class="card c12"><h3>Events by outcome and seriousness</h3><div class="twrap" id="tbEvents"></div></div>
+    <div class="card c7"><h3>Adverse events by week of onset</h3><p class="note">Distinct events by highest intensity</p><div class="chart" id="chEvWeek"></div></div>
+    <div class="card c5"><h3>Day of onset after primaquine</h3><p class="note">Days from Day 0 to onset</p><div class="chart" id="chOnset"></div></div>
+    <div class="card c6"><h3>Signs and symptoms</h3><p class="note">Events with each sign (an event can have several)</p><div class="chart tall" id="chSigns"></div></div>
+    <div class="card c6"><h3>Outcome of events</h3><p class="note">Latest recorded outcome</p><div class="chart short" id="chOutcome"></div>
+      <h3 style="margin-top:12px">Seriousness criteria</h3><p class="note">Serious events; more than one criterion allowed</p><div class="chart short" id="chCrit"></div></div>
+    <div class="card c6"><h3>Haemoglobin change, Day 0 to Day 3</h3><p class="note">Participants with both values; red bars are a fall of 2 g/dL or more (protocol safety threshold)<span class="tag">Period filter does not apply</span></p><div class="chart" id="chHb"></div></div>
+    <div class="card c6"><h3>Signs of haemolysis reported at contacts</h3><p class="note">Share of completed Day 3 to Day 28 contacts with each sign<span class="tag">Period filter does not apply</span></p><div class="chart" id="chSymptoms"></div></div>
+    <div class="card c6"><h3>Baseline anaemia and Day 3 Hb</h3><p class="note">Day 0 anaemia grade against the Day 3 Hb level<span class="tag">Period filter does not apply</span></p><div class="twrap" id="tbHbGrade"></div></div>
+    <div class="card c6"><h3>Open (unresolved) events</h3><p class="note">Events not yet recovered, by time since the last update</p><div class="chart short" id="chOpen"></div>
+      <h3 style="margin-top:12px">Reporting timeliness</h3><p class="note">Focal person informed within 7 days (serious) or 28 days (other)</p><div class="twrap" id="tbTimely"></div></div>
+    <div class="card c12"><h3>Safety by protocol subgroup</h3><p class="note">Children, anaemic at baseline, G6PD status and sex. Exact 95% confidence intervals.<span class="tag">Period filter does not apply</span></p><div class="twrap" id="tbSafetySub"></div></div>
   </div>
 </section>
 
-<!-- ============ DATA QUALITY ============ -->
-<section class="tab" id="t-quality">
-  <p class="intro">Objective 7: the automatic checks run on every record. Critical issues affect patient safety or break the link between forms and must be fixed in Kobo first. The issue list with record details is in the data manager's workbook, not on this public page.</p>
-  <div class="kpis" id="kpiQuality"></div>
+<!-- ============ SPONTANEOUS ============ -->
+<section class="tab" id="t-spont">
+  <p class="intro">ADR/SAE reports for patients not enrolled in CEM (Form 3): patients at non-CEM facilities, and patients at CEM sites who did not consent to CEM. Events of CEM participants are recorded in Form 2 and appear under Safety (CEM).</p>
+  <div class="kpis" id="kpiSpont"></div>
   <div class="grid">
-    <div class="card c12"><h3>Open issues by check</h3><p class="note">Records failing each check, by severity</p><div class="chart tall" id="chIssues"></div></div>
-    <div class="card c7"><h3>Submissions per week by form</h3><div class="chart" id="chSubs"></div></div>
-    <div class="card c5"><h3>Form versions in use</h3><p class="note">Older versions mean a device has not downloaded the latest form</p><div class="twrap" id="tbVersions"></div></div>
+    <div class="card c6"><h3>Reports by week of onset</h3><p class="note">Distinct events by highest intensity</p><div class="chart" id="chSpWeek"></div></div>
+    <div class="card c6"><h3>Where reports come from</h3><div class="chart" id="chSpThrough"></div></div>
+    <div class="card c6"><h3>Signs and symptoms</h3><div class="chart" id="chSpSigns"></div></div>
+    <div class="card c6"><h3>Outcome and timeliness</h3><div class="chart short" id="chSpOutcome"></div><div class="twrap" id="tbSpTimely"></div></div>
+    <div class="card c12"><h3>Reports by facility</h3><div class="twrap" id="tbSpFac"></div></div>
   </div>
 </section>
 
 <!-- ============ ANALYSIS ============ -->
 <section class="tab" id="t-analysis">
-  <p class="intro">Statistical analysis of the programme objectives, using the same methods as the SLDP monitoring and analysis report. Models are fitted on all pilot data at every update, so the site and period filters do not apply here. A model appears once there is enough data to fit it reliably.</p>
+  <div class="objbox"><b>Protocol objectives addressed</b>
+    <ol>
+      <li>Determine the incidence and severity of adverse events following SLDP use.</li>
+      <li>Measure the change in haemoglobin after treatment (Day 0 to Day 3) and the proportion with a fall of 2 g/dL or more.</li>
+      <li>Assess safety in subgroups: children, patients anaemic at baseline and those with possible G6PD deficiency.</li>
+      <li>Identify risk factors for adverse events and for a fall in haemoglobin.</li>
+    </ol>
+    <p class="note" style="margin:8px 0 0">The analysis covers the whole pilot and all sites; the filters do not apply here. Each test runs automatically once there are enough records and is re-run at every update. Causality of individual events is assessed separately by the FDA Technical Advisory Committee (WHO-UMC scale).</p>
+  </div>
+  <div class="objnav" id="objnav"></div>
   <div id="analysisWrap"></div>
+</section>
+
+<!-- ============ DATA QUALITY ============ -->
+<section class="tab" id="t-quality">
+  <p class="intro">Automatic checks run on every record at each update. Critical issues affect patient safety or break the link between forms and should be fixed in Kobo first. Record-level details are not published; use the Patient queue or the Kobo project to find the records.</p>
+  <div class="kpis" id="kpiQuality"></div>
+  <div class="grid">
+    <div class="card c12"><h3>Issues by check</h3><div class="twrap" id="tbIssues"></div></div>
+    <div class="card c7"><h3>Submissions per week by form</h3><div class="chart" id="chSubs"></div></div>
+    <div class="card c5"><h3>Time from contact to data entry</h3><p class="note">Days between the visit or registration date and submission</p><div class="chart" id="chLag"></div></div>
+    <div class="card c7"><h3>Completeness of key fields</h3><div class="twrap" id="tbComplete"></div></div>
+    <div class="card c5"><h3>Form versions in use</h3><p class="note">Older versions mean a browser is using a cached copy of the form</p><div class="twrap" id="tbVersions"></div></div>
+  </div>
+</section>
+
+<!-- ============ QUEUE ============ -->
+<section class="tab" id="t-queue">
+  <div id="qLocked" class="lockbox">
+    <h3>Patient follow-up queue</h3>
+    <p>This list holds participant names and phone numbers, so it is encrypted. Enter the queue password given to the CEM team. The password is checked in your browser and is never sent anywhere.</p>
+    <form id="qForm" autocomplete="off"><input type="password" id="qPw" placeholder="Queue password" aria-label="Queue password"><button class="btn primary" type="submit">Open</button></form>
+    <div class="err" id="qErr"></div>
+  </div>
+  <div id="qOpen" hidden>
+    <p class="intro" id="qIntro"></p>
+    <div class="qchips" id="qChips"></div>
+    <div class="qbar">
+      <label>Visit<select id="qVisit"></select></label>
+      <label>Search<input type="search" id="qSearch" placeholder="Name, ID or phone"></label>
+      <button class="btn" id="qCsv">Download CSV</button>
+      <button class="btn" id="qPrint">Print</button>
+      <button class="btn" id="qLock">Lock</button>
+    </div>
+    <div class="card"><div class="twrap qtable" id="tbQueue" style="max-height:none"></div></div>
+    <p class="private">Confidential. Use this list only to contact participants for scheduled CEM follow-up. Do not share screenshots or the CSV outside the CEM team, and delete downloaded copies after use. The district, facility and site filters above apply to this list.</p>
+  </div>
 </section>
 
 <!-- ============ METHODS ============ -->
 <section class="tab" id="t-methods">
-  <div class="card">
-  <h3>How this dashboard works</h3>
-  <p class="intro" style="margin-top:8px">Every six hours an automated job downloads the three KoboToolbox forms, runs the cleaning, validation and linkage steps of the SLDP analysis pipeline, fits the statistical models and publishes the results here. Only aggregate counts and model results are published. No names, telephone numbers, Patient IDs, Event IDs or free-text notes leave the pipeline, and a final check blocks publication if any identifier pattern appears.</p>
-  <dl class="defs">
-    <dt>Eligible</dt><dd>Patient with confirmed P. falciparum malaria whose screening in Form 1 found no exclusion (age under 12 months, pregnancy, breastfeeding an infant under 1, severe anaemia, primaquine allergy, history of haemolysis or other exclusion).</dd>
-    <dt>SLDP coverage</dt><dd>Eligible patients given SLDP divided by all eligible patients. Status: green 90% or more, amber 75 to 89%, red below 75%.</dd>
-    <dt>Directly observed</dt><dd>SLDP swallowed in front of the health worker, as recorded in Form 1.</dd>
-    <dt>Dose within range</dt><dd>Dose in mg divided by weight in kg between 0.15 and 0.4 mg/kg (target 0.25 mg/kg, maximum 15 mg).</dd>
-    <dt>CEM enrolment</dt><dd>Patients at CEM sites who consented and were enrolled in cohort event monitoring.</dd>
-    <dt>Visit status</dt><dd>Completed: a completed Form 2 of that visit type. Due now: due date reached and still inside the grace window (Day 0: 1 day, Day 3: 2, Day 7: 3, Day 14: 3, Day 28: 5). Overdue: past the grace window without a completed visit. Not yet due: due date in the future. Exited: due after the patient withdrew, was lost or died. No baseline date: enrolled patient with neither an SLDP date nor a manual baseline.</dd>
-    <dt>On time</dt><dd>Completed visit no later than the end of its grace window.</dd>
-    <dt>Follow-up completion status</dt><dd>Green 90% or more of due visits completed, amber 75 to 89%, red below 75%.</dd>
-    <dt>Adverse event</dt><dd>A distinct Event ID reported in Form 3, or an adverse event recorded in Form 2. Serious: meets any SAE criterion (death, life-threatening, hospitalisation, disability, congenital anomaly, other medically important).</dd>
-    <dt>Reporting timeliness</dt><dd>First Form 3 report within 2 days of event onset.</dd>
-    <dt>Haemoglobin alert</dt><dd>Fall of 2 g/dL or more from Day 0 to Day 3.</dd>
-    <dt>Data issue severity</dt><dd>Critical: wrong clinical data or a broken link between forms. Major: likely error that changes an indicator. Minor: worth checking, does not change results.</dd>
-    <dt>Confidence intervals</dt><dd>Exact (Clopper-Pearson) 95% intervals for proportions; Wald intervals for model estimates.</dd>
-  </dl>
+  <div class="grid">
+    <div class="card c6"><h3>Data and updates</h3><dl class="defs">
+      <dt>Source</dt><dd>KoboToolbox web forms: Form 1 Patient Register, Form 2 CEM Form (Days 0, 3, 7, 14, 28 and unscheduled), Form 3 ADR/SAE Report for patients not enrolled in CEM. Data are pulled through the Kobo API every 6 hours by a GitHub Action, cleaned in R and published as aggregates.</dd>
+      <dt>Training records</dt><dd>Patients whose first name starts with TEST, and all their Form 2 and Form 3 records, are excluded.</dd>
+      <dt>Privacy</dt><dd>The public page holds counts only: no names, phone numbers, Patient IDs or Event IDs. The build stops if an identifier pattern is found. The patient queue is encrypted with AES-256-GCM using a key derived from the queue password (PBKDF2-SHA256, 310,000 iterations) and can only be read with that password.</dd>
+      <dt>Filters</dt><dd>Period filters use the week of registration (enrolment and cascade), the week of Day 0 (follow-up), the week of onset (events) and the week of the call (call outcomes). Weeks start on Monday.</dd>
+    </dl></div>
+    <div class="card c6"><h3>Definitions</h3><dl class="defs">
+      <dt>Eligible for SLDP</dt><dd>P. falciparum confirmed by test; aged 1 year or more; not pregnant or breastfeeding an infant under 1; no allergy to primaquine; no severe anaemia, dark urine or jaundice.</dd>
+      <dt>CEM participant</dt><dd>Given primaquine at a CEM site, enrolled in Form 1 and consenting at Day 0 in Form 2.</dd>
+      <dt>Adverse event</dt><dd>Any untoward medical occurrence after primaquine, recorded once per Event ID with later updates. Serious: death, life-threatening, hospitalisation or prolonged hospitalisation, disability, congenital anomaly or other medically important event.</dd>
+      <dt>Signs of haemolysis</dt><dd>Dark urine, jaundice or a fall in Hb of 2 g/dL or more between Day 0 and Day 3 (also pallor, fatigue and hospitalisation are tracked).</dd>
+      <dt>Lost to follow-up</dt><dd>Two unsuccessful scheduled follow-ups (protocol). The queue lists participants who meet this definition so the team can confirm and record the disposition.</dd>
+      <dt>Reporting deadlines</dt><dd>FDA: serious ADRs within 7 days of onset, other ADRs within 28 days.</dd>
+      <dt>Scorecard thresholds</dt><dd>Green on target, amber below target, red needs action. Coverage of eligible patients: 90% / 75%. Follow-up completion: 90% / 75%. Enrolment against expected: 90% / 70%. Reporting on time: 95% / 80%.</dd>
+    </dl></div>
+    <div class="card c12"><h3>Statistical methods</h3><dl class="defs">
+      <dt>Proportions</dt><dd>Exact (Clopper-Pearson) 95% confidence intervals. Incidence rates per 1,000 person-days with exact Poisson intervals; person-time runs from Day 0 to the last contact, exit or Day 28.</dd>
+      <dt>Haemoglobin</dt><dd>Paired t-test and Wilcoxon signed-rank test for the Day 0 to Day 3 change; multiple linear regression for predictors of the change.</dd>
+      <dt>Subgroups and risk factors</dt><dd>Chi-square or Fisher's exact tests; risk ratios with log-method intervals; multivariable logistic regression (odds ratios) and Cox regression (hazard ratios); Kaplan-Meier curves for time to first event and retention.</dd>
+      <dt>Signal detection</dt><dd>Proportional reporting ratio across all events, comparing events where primaquine is suspected with events where it is not (signal: PRR 2 or more, chi-square 4 or more, 3 or more cases). Signals are hypotheses for the safety team, not proof of causation.</dd>
+    </dl></div>
   </div>
 </section>
 </main>
@@ -231,49 +340,48 @@ footer{max-width:1360px;margin:0 auto;padding:0 32px 32px;font-size:12.5px;color
 
 <script>
 "use strict";
-/* ---------------------------------------------------------------------------
-   SLDP dashboard front end. Reads data/dashboard.json (aggregates only),
-   applies the filters in the browser and draws every chart with ECharts.
-   Author: Kingsley Amegah
---------------------------------------------------------------------------- */
-const TARGETS = { coverage: [90, 75], followup: [90, 75], dot: [90, 75] };   // [green from, amber from]
-const VISIT = { d0: "Day 0", d3: "Day 3", d7: "Day 7", d14: "Day 14", d28: "Day 28", unscheduled: "Unscheduled" };
-const VISIT_ORDER = ["d0", "d3", "d7", "d14", "d28"];
-const STATUS_ORDER = ["Completed", "Due now", "Overdue", "Not yet due", "Exited", "No baseline date"];
-const SYMPTOM = { dark_urine: "Dark urine", pallor_report: "Pallor", jaundice_report: "Yellow eyes or skin", fatigue: "Fatigue",
-  dizziness: "Dizziness", fever: "Fever", nausea: "Nausea", vomiting: "Vomiting", rash: "Rash" };
-const SENT = s => s == null ? "" : String(s).charAt(0).toUpperCase() + String(s).slice(1).replace(/_/g, " ");
-
-let D = null, charts = {}, sortState = { key: "Registered", dir: -1 };
+let D = null, charts = {}, Q = null, qFilter = "action";
 const $ = id => document.getElementById(id);
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const rows = t => { if (!t || !Object.keys(t).length) return []; const k = Object.keys(t), n = t[k[0]].length, out = [];
   for (let i = 0; i < n; i++) { const o = {}; k.forEach(c => o[c] = t[c][i]); out.push(o); } return out; };
-const sum = (a, k) => a.reduce((s, r) => s + (+r[k] || 0), 0);
+const sum = (a, k = "n") => a.reduce((s, r) => s + (+r[k] || 0), 0);
 const pct = (n, d) => d > 0 ? Math.round(1000 * n / d) / 10 : null;
 const fmtP = v => v == null ? "–" : v.toFixed(1) + "%";
-const fmtN = v => v == null ? "–" : Number(v).toLocaleString("en-GB");
-const groupSum = (a, key, val) => { const m = new Map(); a.forEach(r => m.set(r[key], (m.get(r[key]) || 0) + (+r[val] || 0))); return m; };
+const fmtN = v => v == null || Number.isNaN(v) ? "–" : Number(v).toLocaleString("en-GB");
+const by = (a, key, val = "n") => { const m = new Map(); a.forEach(r => m.set(r[key], (m.get(r[key]) || 0) + (+r[val] || 0))); return m; };
+const uniq = a => [...new Set(a)];
 function el(tag, attrs = {}, text) { const e = document.createElement(tag); Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v)); if (text != null) e.textContent = text; return e; }
+function betaInv(p, a, b) { let lo = 0, hi = 1; for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; (ibeta(m, a, b) < p) ? lo = m : hi = m; } return (lo + hi) / 2; }
+function lgamma(x) { const c = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+  let y = x, t = x + 5.5; t -= (x + 0.5) * Math.log(t); let s = 1.000000000190015; for (const q of c) s += q / ++y; return -t + Math.log(2.5066282746310005 * s / x); }
+function ibeta(x, a, b) { if (x <= 0) return 0; if (x >= 1) return 1; const bt = Math.exp(lgamma(a + b) - lgamma(a) - lgamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+  const cf = (x, a, b) => { let qab = a + b, qap = a + 1, qam = a - 1, c = 1, d = 1 - qab * x / qap; d = 1 / (Math.abs(d) < 1e-30 ? 1e-30 : d); let h = d;
+    for (let m = 1; m < 200; m++) { const m2 = 2 * m; let aa = m * (b - m) * x / ((qam + m2) * (a + m2)); d = 1 + aa * d; d = 1 / (Math.abs(d) < 1e-30 ? 1e-30 : d); c = 1 + aa / c; c = Math.abs(c) < 1e-30 ? 1e-30 : c; h *= d * c;
+      aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2)); d = 1 + aa * d; d = 1 / (Math.abs(d) < 1e-30 ? 1e-30 : d); c = 1 + aa / c; c = Math.abs(c) < 1e-30 ? 1e-30 : c; const del = d * c; h *= del; if (Math.abs(del - 1) < 3e-7) break; } return h; };
+  return x < (a + 1) / (a + b + 2) ? bt * cf(x, a, b) / a : 1 - bt * cf(1 - x, b, a) / b; }
+function exactCI(x, n) { if (!n) return null; return [x === 0 ? 0 : betaInv(0.025, x, n - x + 1), x === n ? 1 : betaInv(0.975, x + 1, n - x)].map(v => 100 * v); }
+const propTxt = (x, n) => { if (!n) return "–"; const c = exactCI(x, n); return `${(100 * x / n).toFixed(1)}% (${c[0].toFixed(1)} to ${c[1].toFixed(1)})`; };
 
 /* ---------- Filters ---------- */
-function facLabel(code) { const i = D.facilities.code.indexOf(code); return i >= 0 ? D.facilities.label[i] : (code === "unknown" ? "Not recorded" : code); }
+const FAC = () => rows(D.facilities);
+function facLabel(code) { const f = FAC().find(f => f.code === code); return f ? f.label : code; }
 function selectedFacilities() {
   const dist = $("fDistrict").value, fac = $("fFacility").value, site = $("fSite").value;
-  return new Set(rows(D.facilities).filter(f => (dist === "all" || f.district === dist) && (fac === "all" || f.code === fac) &&
-    (site === "all" || (site === "cem" ? f.cem_site : !f.cem_site))).map(f => f.code).concat(dist === "all" && fac === "all" && site === "all" ? ["unknown"] : []));
+  return new Set(FAC().filter(f => (dist === "all" || f.district === dist) && (fac === "all" || f.code === fac) && (site === "all" || (site === "cem" ? f.cem_site : !f.cem_site))).map(f => f.code));
 }
 function weekFrom() {
   const p = $("fPeriod").value; if (p === "all") return "0000";
   const d = new Date(D.meta.today + "T00:00:00Z"); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day - 7 * (+p - 1));
   return d.toISOString().slice(0, 10);
 }
-function F(table, useWeek) { const fs = selectedFacilities(), w0 = weekFrom();
-  return rows(D[table]).filter(r => fs.has(r.f) && (!useWeek || !r.w || r.w >= w0)); }
+function F(table, useWeek = true) { const fs = selectedFacilities(), w0 = weekFrom();
+  return rows(D[table]).filter(r => fs.has(r.f) && (!useWeek || !("w" in r) || (r.w && r.w >= w0))); }
 function fillFacilitySelect() {
-  const dist = $("fDistrict").value, cur = $("fFacility").value, s = $("fFacility");
+  const dist = $("fDistrict").value, site = $("fSite").value, cur = $("fFacility").value, s = $("fFacility");
   s.replaceChildren(el("option", { value: "all" }, "All facilities"));
-  rows(D.facilities).filter(f => dist === "all" || f.district === dist).forEach(f => s.appendChild(el("option", { value: f.code }, f.label)));
+  FAC().filter(f => f.code !== "unknown" && (dist === "all" || f.district === dist) && (site === "all" || (site === "cem" ? f.cem_site : !f.cem_site)))
+    .forEach(f => s.appendChild(el("option", { value: f.code }, f.label + (f.cem_site ? " (CEM)" : ""))));
   s.value = [...s.options].some(o => o.value === cur) ? cur : "all";
 }
 
@@ -285,14 +393,15 @@ function kpis(id, items) {
   items.forEach(it => { const c = el("div", { class: "kpi" }); c.appendChild(el("p", { class: "k" }, it.k)); c.appendChild(el("p", { class: "v" }, it.v));
     if (it.d) c.appendChild(el("p", { class: "d" }, it.d));
     if (it.t) { const [, lab, col] = status(it.raw, it.t); const s = el("span", { class: "st" }); const dt = el("span", { class: "dot" }); dt.style.background = col; s.append(dt, document.createTextNode(lab)); c.appendChild(s); }
+    if (it.alarm != null) { const s = el("span", { class: "st" }); const dt = el("span", { class: "dot" }); dt.style.background = it.alarm ? css("--critical") : css("--good"); s.append(dt, document.createTextNode(it.alarm ? it.alarmText || "Review" : it.okText || "None")); c.appendChild(s); }
     box.appendChild(c); });
 }
 function base() { const ink2 = css("--ink-2"), hair = css("--hair"), surf = css("--surface");
   return { textStyle: { fontFamily: "IBM Plex Sans, sans-serif", color: ink2 }, animationDuration: 300,
-    grid: { left: 8, right: 16, top: 34, bottom: 8, containLabel: true },
+    grid: { left: 8, right: 18, top: 34, bottom: 8, containLabel: true },
     tooltip: { backgroundColor: surf, borderColor: css("--border"), textStyle: { color: css("--ink"), fontSize: 13 }, confine: true },
     legend: { top: 0, left: 0, icon: "roundRect", itemWidth: 12, itemHeight: 8, textStyle: { color: ink2, fontSize: 12 } },
-    _axis: { axisLine: { lineStyle: { color: css("--border") } }, axisTick: { show: false }, axisLabel: { color: css("--ink-3"), fontSize: 11.5 }, splitLine: { lineStyle: { color: hair } } } };
+    _axis: { axisLine: { lineStyle: { color: css("--border") } }, axisTick: { show: false }, axisLabel: { color: css("--ink-3"), fontSize: 11.5 }, splitLine: { lineStyle: { color: hair } }, nameTextStyle: { color: css("--ink-3") } } };
 }
 function draw(id, opt) {
   const node = $(id); if (!node) return;
@@ -300,275 +409,503 @@ function draw(id, opt) {
   if (!charts[id]) { node.replaceChildren(); charts[id] = echarts.init(node, null, { renderer: "svg" }); }
   charts[id].setOption(opt, true);
 }
-function ax(extra) { return Object.assign({}, base()._axis, extra); }
-function barOpt(cats, series, { horizontal = false, stack = false, percent = false, legend = true, max } = {}) {
-  if (!cats.length) return null; const b = base();
-  const valAx = ax({ type: "value", max, axisLabel: Object.assign({}, b._axis.axisLabel, { formatter: percent ? "{value}%" : "{value}" }) });
-  const catAx = ax({ type: "category", data: cats, inverse: horizontal, axisLabel: Object.assign({}, b._axis.axisLabel, { width: 170, overflow: "truncate", interval: 0, hideOverlap: !horizontal }) , splitLine: { show: false } });
+const ax = extra => { const a = base()._axis; return Object.assign({}, a, extra, { axisLabel: Object.assign({}, a.axisLabel, (extra || {}).axisLabel || {}) }); };
+function barOpt(cats, series, { horizontal = false, stack = false, percent = false, legend = true, max, labels = false, rotate = 0 } = {}) {
+  if (!cats.length || !series.some(s => s.data.some(v => v))) return null; const b = base();
+  const valAx = ax({ type: "value", max, minInterval: percent ? 0 : 1, axisLabel: { formatter: percent ? "{value}%" : "{value}" } });
+  const catAx = ax({ type: "category", data: cats, inverse: horizontal, axisLabel: { width: 190, overflow: "truncate", interval: 0, hideOverlap: !horizontal, rotate }, splitLine: { show: false } });
   return { textStyle: b.textStyle, animationDuration: 300, grid: Object.assign({}, b.grid, { top: legend ? 34 : 10 }), legend: legend ? b.legend : { show: false },
-    tooltip: Object.assign({}, b.tooltip, { trigger: "axis", axisPointer: { type: "shadow", shadowStyle: { color: "rgba(127,127,127,.08)" } },
-      valueFormatter: v => v == null ? "–" : (percent ? v + "%" : fmtN(v)) }),
+    tooltip: Object.assign({}, b.tooltip, { trigger: "axis", axisPointer: { type: "shadow", shadowStyle: { color: "rgba(127,127,127,.08)" } }, valueFormatter: v => v == null ? "–" : (percent ? v + "%" : fmtN(v)) }),
     xAxis: horizontal ? valAx : catAx, yAxis: horizontal ? catAx : valAx,
     series: series.map(s => Object.assign({ type: "bar", stack: stack ? "a" : undefined, barMaxWidth: 34, emphasis: { focus: "series" },
+      label: labels ? { show: true, position: horizontal ? "right" : "top", fontSize: 11, color: css("--ink-2"), formatter: p => p.value ? (percent ? p.value + "%" : fmtN(p.value)) : "" } : undefined,
       itemStyle: { borderRadius: stack ? 0 : (horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]), borderColor: css("--surface"), borderWidth: stack ? 1 : 0 } }, s)) };
 }
-function table(id, cols, data, { sortable = false } = {}) {
+// One-series ranked horizontal bar from a Map
+function rankOpt(map, color, { top = 12, percentOf } = {}) {
+  const e = [...map.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, top);
+  if (!e.length) return null;
+  const o = barOpt(e.map(x => x[0]), [{ name: "Count", data: e.map(x => x[1]), itemStyle: { color, borderRadius: [0, 4, 4, 0] } }], { horizontal: true, legend: false, labels: true });
+  if (percentOf) o.series[0].label.formatter = p => `${fmtN(p.value)} (${(100 * p.value / percentOf).toFixed(0)}%)`;
+  return o;
+}
+let sortStates = {};
+function table(id, cols, data, { sortable = false, total = null } = {}) {
   const host = $(id); if (!data.length) { host.replaceChildren(el("div", { class: "empty" }, "No records for this selection yet.")); return; }
-  if (sortable) data = [...data].sort((a, b) => { const x = a[sortState.key], y = b[sortState.key]; if (x == null) return 1; if (y == null) return -1; return (x > y ? 1 : x < y ? -1 : 0) * sortState.dir; });
+  const st = sortStates[id];
+  if (sortable && st) data = [...data].sort((a, b) => { const x = a[st.key], y = b[st.key]; if (x == null) return 1; if (y == null) return -1; return (x > y ? 1 : x < y ? -1 : 0) * st.dir; });
   const t = el("table"), thead = el("thead"), tr = el("tr");
-  cols.forEach(c => { const th = el("th", { class: (c.num ? "n " : "") + (sortable ? "sort" : "") }, c.label + (sortable && sortState.key === c.label ? (sortState.dir > 0 ? " ▲" : " ▼") : ""));
-    if (sortable) th.onclick = () => { sortState = { key: c.label, dir: sortState.key === c.label ? -sortState.dir : (c.num ? -1 : 1) }; renderOverview(); };
+  cols.forEach(c => { const th = el("th", { class: (c.num ? "n " : "") + (sortable ? "sort" : "") }, c.label + (sortable && st && st.key === c.label ? (st.dir > 0 ? " ▲" : " ▼") : ""));
+    if (sortable) th.onclick = () => { sortStates[id] = { key: c.label, dir: st && st.key === c.label ? -st.dir : (c.num ? -1 : 1) }; renderCurrent(); };
     tr.appendChild(th); });
   thead.appendChild(tr); t.appendChild(thead); const tb = el("tbody");
-  data.forEach(r => { const row = el("tr"); cols.forEach(c => { const td = el("td", { class: c.num ? "n" : "" }); const v = r[c.label];
-      if (c.chip) { const [cls] = status(v, c.chip); td.appendChild(el("span", { class: "chip " + cls }, c.fmt ? c.fmt(v) : v)); } else td.textContent = c.fmt ? c.fmt(v) : (v == null ? "–" : v);
-      row.appendChild(td); }); tb.appendChild(row); });
+  const addRow = (r, cls) => { const row = el("tr", cls ? { class: cls } : {}); cols.forEach(c => { const td = el("td", { class: (c.num ? "n" : "") + (c.wrap ? " wrap" : "") }); const v = r[c.label];
+      if (c.chip && v != null && r._nochip !== true) { const [cls] = status(c.chipVal ? c.chipVal(r) : v, c.chip); td.appendChild(el("span", { class: "chip " + cls }, c.fmt ? c.fmt(v, r) : v)); }
+      else td.textContent = c.fmt ? c.fmt(v, r) : (v == null ? "–" : (typeof v === "number" ? fmtN(v) : v));
+      row.appendChild(td); }); tb.appendChild(row); };
+  data.forEach(r => addRow(r)); if (total) addRow(total, "total");
   t.appendChild(tb); host.replaceChildren(t);
 }
-const SC = () => ({ "Completed": css("--good"), "Due now": css("--warning"), "Overdue": css("--critical"), "Not yet due": css("--neutral"),
-  "Exited": css("--neutral-2"), "No baseline date": css("--serious") });
+const weeksOf = a => uniq(a.map(r => r.w).filter(Boolean)).sort();
+const wlab = w => { const d = new Date(w + "T00:00:00Z"); return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }); };
+const SC = () => ({ "Completed": css("--good"), "Due now": css("--warning"), "Overdue": css("--critical"), "Missed": css("--serious"), "Upcoming (7 days)": css("--seq2"),
+  "Not yet due": css("--neutral"), "Exited": css("--neutral-2"), "No Day 0 date": css("--s4") });
+const INT = () => ({ "Mild": css("--seq2"), "Moderate": css("--warning"), "Severe": css("--critical"), "Not recorded": css("--neutral") });
+const VIS = [["d0", "Day 0"], ["d3", "Day 3"], ["d7", "Day 7"], ["d14", "Day 14"], ["d28", "Day 28"]];
+const monthsElapsed = () => { const s = new Date(D.meta.pilot_start + "T00:00:00Z"), t = new Date(D.meta.today + "T00:00:00Z"); return Math.max(0, Math.min(D.meta.protocol.enrol_months, (t - s) / 864e5 / 30.4375)); };
 
 /* ---------- OVERVIEW ---------- */
 function renderOverview() {
-  const rw = F("reg_week", true), fu = F("followup"), dq = F("dq"), sae = F("sae"), ev = F("events", true);
-  const reg = sum(rw, "registered"), elig = sum(rw, "eligible"), ge = sum(rw, "given_elig"), given = sum(rw, "given"), cov = pct(ge, elig);
-  const due = fu.filter(r => ["Completed", "Due now", "Overdue"].includes(r.status)), done = sum(due.filter(r => r.status === "Completed"), "n");
-  const fcomp = pct(done, sum(due, "n")), overdue = sum(fu.filter(r => r.status === "Overdue"), "n");
+  const rg = F("reg"), fu = F("fu", false), ev = F("ev").filter(r => r.src === "cem"), sp = F("ev").filter(r => r.src === "spont"), dq = F("dq", false), qc = F("queue", false), sf = F("safety", false);
+  const reg = sum(rg, "registered"), elig = sum(rg, "eligible"), given = sum(rg, "given"), enr = sum(rg, "enrolled");
+  const due = fu.filter(r => ["Completed", "Due now", "Overdue", "Missed"].includes(r.status)), done = sum(due.filter(r => r.status === "Completed"));
+  const d3 = due.filter(r => r.visit === "d3"), d3done = sum(d3.filter(r => r.status === "Completed"));
+  const sel = selectedFacilities(), facs = FAC().filter(f => sel.has(f.code) && f.cem_site);
+  const expected = facs.reduce((s, f) => s + Math.min(f.target_total, f.target_month * monthsElapsed()), 0);
+  const enrAll = sum(F("enrol_day", false)), cohort = sum(sf, "n"), ae = sum(sf, "ae"), sae = sum(ev.filter(r => r.serious)), hbp = sum(sf, "hb_pairs"), hbd = sum(sf, "hb_drop");
+  const overdue = sum(qc.filter(r => r.status === "Overdue")), dueNow = sum(qc.filter(r => r.status === "Due now"));
+  const crit = sum(dq.filter(r => r.severity === "Critical"));
   kpis("kpiOverview", [
-    { k: "Patients registered", v: fmtN(reg), d: `${fmtN(sum(rw, "pf"))} with confirmed P. falciparum` },
-    { k: "Screened eligible", v: fmtN(elig), d: `${fmtP(pct(elig, reg))} of registered` },
-    { k: "SLDP coverage among eligible", v: fmtP(cov), d: `${fmtN(ge)} of ${fmtN(elig)} eligible`, raw: cov, t: TARGETS.coverage },
-    { k: "Directly observed", v: fmtP(pct(sum(rw, "dot"), given)), d: `of ${fmtN(given)} given SLDP`, raw: pct(sum(rw, "dot"), given), t: TARGETS.dot },
-    { k: "Enrolled in CEM", v: fmtN(sum(rw, "enrolled")), d: `${fmtP(pct(sum(rw, "enrolled"), sum(rw, "cem_site_pts")))} of CEM-site patients` },
-    { k: "Due visits completed", v: fmtP(fcomp), d: `${fmtN(done)} of ${fmtN(sum(due, "n"))} due`, raw: fcomp, t: TARGETS.followup },
-    { k: "Visits overdue now", v: fmtN(overdue), d: "past the grace window" },
-    { k: "Adverse events", v: fmtN(sum(ev, "n")), d: `${fmtN(sum(ev.filter(r => r.serious), "n"))} serious` },
-    { k: "Critical data issues", v: fmtN(sum(dq.filter(r => r.severity === "Critical"), "n")), d: `${fmtN(sum(dq, "n"))} issues in total` } ]);
+    { k: "Patients registered", v: fmtN(reg), d: `${fmtN(sum(rg, "pf"))} with P. falciparum confirmed` },
+    { k: "Primaquine given", v: fmtN(given), d: `${fmtP(pct(given, elig))} of ${fmtN(elig)} eligible`, raw: pct(given, elig), t: [90, 75] },
+    { k: "Enrolled in CEM", v: fmtN(enr), d: `${fmtP(pct(enr, sum(rg, "cem_offered")))} of those given primaquine at CEM sites` },
+    { k: "CEM enrolment vs expected", v: expected ? fmtP(pct(enrAll, expected)) : "–", d: `${fmtN(enrAll)} of ${fmtN(Math.round(expected))} expected by today (target 1,500)`, raw: expected ? pct(enrAll, expected) : null, t: [90, 70] },
+    { k: "Follow-up completion", v: fmtP(pct(done, sum(due))), d: `${fmtN(done)} of ${fmtN(sum(due))} contacts due · Day 3: ${fmtP(pct(d3done, sum(d3)))}`, raw: pct(done, sum(due)), t: [90, 75] },
+    { k: "Participants with an AE", v: fmtP(pct(ae, cohort)), d: `${fmtN(ae)} of ${fmtN(cohort)} CEM participants (all dates)` },
+    { k: "Serious adverse events", v: fmtN(sae + sum(sp.filter(r => r.serious))), d: `${fmtN(sae)} CEM · ${fmtN(sum(sp.filter(r => r.serious)))} Form 3`, alarm: sae + sum(sp.filter(r => r.serious)) > 0, alarmText: "Review with the safety team" },
+    { k: "Hb fall of 2 g/dL or more", v: fmtN(hbd), d: `${fmtP(pct(hbd, hbp))} of ${fmtN(hbp)} with Day 0 and Day 3 Hb`, alarm: hbd > 0, alarmText: "Safety signal: check each case" },
+    { k: "Contacts overdue today", v: fmtN(overdue), d: `${fmtN(dueNow)} due now · ${fmtN(sum(qc.filter(r => r.status === "Upcoming (7 days)")))} in the next 7 days`, alarm: overdue > 0, alarmText: "Open the Patient queue", okText: "Up to date" },
+    { k: "Critical data issues", v: fmtN(crit), d: `${fmtN(sum(dq))} issues in total`, alarm: crit > 0, alarmText: "Fix in Kobo first", okText: "None" }]);
 
-  const weeks = [...new Set(rw.map(r => r.w))].sort();
-  const enr = groupSum(rw, "w", "enrolled"), regw = groupSum(rw, "w", "registered");
-  const wl = weeks.map(w => new Date(w + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" }));
-  draw("chRegWeek", barOpt(wl, [
-    { name: "Enrolled in CEM", data: weeks.map(w => enr.get(w) || 0), itemStyle: { color: css("--s1") } },
-    { name: "Registered, not in CEM", data: weeks.map(w => (regw.get(w) || 0) - (enr.get(w) || 0)), itemStyle: { color: css("--neutral") } }], { stack: true }));
-  const ew = groupSum(rw, "w", "eligible"), gw = groupSum(rw, "w", "given_elig"), b = base();
-  draw("chCovWeek", weeks.length ? { textStyle: b.textStyle, grid: Object.assign({}, b.grid, { top: 16 }),
-    tooltip: Object.assign({}, b.tooltip, { trigger: "axis", formatter: p => { const w = weeks[p[0].dataIndex]; return `<b>${p[0].value == null ? "–" : p[0].value + "%"}</b><br>${gw.get(w) || 0} of ${ew.get(w) || 0} eligible<br><span style="color:${css("--ink-3")}">Week of ${p[0].name}</span>`; } }),
-    xAxis: ax({ type: "category", data: wl, boundaryGap: false, splitLine: { show: false } }),
-    yAxis: ax({ type: "value", min: 0, max: 100, axisLabel: { formatter: "{value}%", color: css("--ink-3") } }),
-    series: [{ type: "line", name: "Coverage", data: weeks.map(w => pct(gw.get(w) || 0, ew.get(w) || 0)), connectNulls: true, symbolSize: 8,
-      lineStyle: { width: 2, color: css("--s1") }, itemStyle: { color: css("--s1"), borderColor: css("--surface"), borderWidth: 2 },
-      markLine: { silent: true, symbol: "none", label: { formatter: "Target 90%", color: css("--ink-3"), position: "insideEndTop" }, lineStyle: { color: css("--ink-3"), type: "dashed", width: 1 }, data: [{ yAxis: TARGETS.coverage[0] }] } }] } : null);
+  // Alerts
+  const A = [], add = (lvl, txt) => A.push([lvl, txt]);
+  if (overdue) add("b", `${fmtN(overdue)} scheduled contact(s) overdue and ${fmtN(dueNow)} due now. Work through the Patient queue.`);
+  const missed = sum(fu.filter(r => r.status === "Missed")); if (missed) add("w", `${fmtN(missed)} contact(s) missed (the next visit is already due).`);
+  const ltfu = sum(F("exits", false).filter(r => r.status.startsWith("Meets LTFU"))); if (ltfu) add("w", `${fmtN(ltfu)} participant(s) meet the loss-to-follow-up definition but are not closed in Form 2.`);
+  const late = sum(F("ev_timely", false).filter(r => !r.on_time && r.serious)); if (late) add("b", `${fmtN(late)} serious event(s) reported later than 7 days after onset.`);
+  const openOld = sum(F("ev_open", false).filter(r => r.age === "Over 14 days ago")); if (openOld) add("w", `${fmtN(openOld)} unresolved event(s) with no update for more than 14 days.`);
+  if (hbd) add("b", `${fmtN(hbd)} participant(s) with a fall in Hb of 2 g/dL or more between Day 0 and Day 3.`);
+  if (crit) add("b", `${fmtN(crit)} critical data issue(s). See Data quality.`);
+  const behind = facs.filter(f => { const e = Math.min(f.target_total, f.target_month * monthsElapsed()); const n = sum(F("enrol_day", false).filter(r => r.f === f.code)); return e >= 5 && n < 0.7 * e; });
+  if (behind.length) add("w", `Behind enrolment target (below 70% of expected): ${behind.map(f => f.label).join(", ")}.`);
+  const declined = sum(rg, "eligible") - sum(rg, "accepted") - (sum(rg, "eligible") - sum(rg, "act")); if (elig && pct(declined, elig) > 10) add("w", `${fmtP(pct(declined, elig))} of eligible patients declined primaquine. See the refusal reasons.`);
+  if (!A.length) add("g", "Nothing needs attention for the selected sites.");
+  $("alerts").replaceChildren(...A.map(([lvl, txt]) => { const li = el("li", { class: lvl === "b" ? "b" : "" }); const d = el("span", { class: "dot" }); d.style.background = lvl === "b" ? css("--critical") : lvl === "w" ? css("--warning") : css("--good"); li.append(d, document.createTextNode(txt)); return li; }));
 
-  // Scorecard: one row per facility
-  const fs = [...selectedFacilities()].filter(c => c !== "unknown");
-  const scRows = fs.map(code => { const R = rw.filter(r => r.f === code), U = fu.filter(r => r.f === code), Q = dq.filter(r => r.f === code), S = sae.filter(r => r.f === code);
-    const fi = D.facilities.code.indexOf(code); const dueU = U.filter(r => ["Completed", "Due now", "Overdue"].includes(r.status));
-    return { "Facility": D.facilities.label[fi], "District": D.facilities.district[fi], "Site": D.facilities.cem_site[fi] ? "CEM" : "Non-CEM",
-      "Registered": sum(R, "registered"), "Eligible": sum(R, "eligible"), "Coverage %": pct(sum(R, "given_elig"), sum(R, "eligible")),
-      "Observed %": pct(sum(R, "dot"), sum(R, "given")), "Enrolled": sum(R, "enrolled"),
-      "Follow-up %": pct(sum(dueU.filter(r => r.status === "Completed"), "n"), sum(dueU, "n")), "Overdue": sum(U.filter(r => r.status === "Overdue"), "n"),
-      "AEs": sum(S, "events"), "SAEs": sum(S, "serious"), "Critical issues": sum(Q.filter(r => r.severity === "Critical"), "n") }; })
-    ;   // every selected facility is listed, including sites with no records yet
-  const p1 = v => v == null ? "–" : v.toFixed(1);
-  table("tbScore", [{ label: "Facility" }, { label: "District" }, { label: "Site" }, { label: "Registered", num: 1 }, { label: "Eligible", num: 1 },
-    { label: "Coverage %", num: 1, chip: TARGETS.coverage, fmt: p1 }, { label: "Observed %", num: 1, chip: TARGETS.dot, fmt: p1 }, { label: "Enrolled", num: 1 },
-    { label: "Follow-up %", num: 1, chip: TARGETS.followup, fmt: p1 }, { label: "Overdue", num: 1 }, { label: "AEs", num: 1 }, { label: "SAEs", num: 1 },
-    { label: "Critical issues", num: 1 }], scRows, { sortable: true });
+  draw("chEnrolCum", enrolCumOpt());
+  const ws = weeksOf(rg);
+  draw("chRegWeek", barOpt(ws.map(wlab), [
+    { name: "Registered", data: ws.map(w => sum(rg.filter(r => r.w === w), "registered")), itemStyle: { color: css("--neutral") } },
+    { name: "Primaquine given", data: ws.map(w => sum(rg.filter(r => r.w === w), "given")), itemStyle: { color: css("--s1") } },
+    { name: "Enrolled in CEM", data: ws.map(w => sum(rg.filter(r => r.w === w), "enrolled")), itemStyle: { color: css("--s3") } }]));
+  const qs = ["Overdue", "Due now", "Upcoming (7 days)"];
+  draw("chQueue", barOpt(VIS.map(v => v[1]), qs.map(s => ({ name: s, data: VIS.map(([v]) => sum(qc.filter(r => r.visit === v && r.status === s))), itemStyle: { color: SC()[s] } })), { stack: true }));
+
+  // Scorecard
+  const allReg = rows(D.reg).filter(r => r.w >= weekFrom()), allFu = rows(D.fu), allSafe = rows(D.safety), allDq = rows(D.dq), allEnr = rows(D.enrol_day);
+  const data = FAC().filter(f => sel.has(f.code) && f.code !== "unknown").map(f => {
+    const R = allReg.filter(r => r.f === f.code), U = allFu.filter(r => r.f === f.code && ["Completed", "Due now", "Overdue", "Missed"].includes(r.status)), S = allSafe.filter(r => r.f === f.code);
+    const exp = f.cem_site ? Math.min(f.target_total, f.target_month * monthsElapsed()) : null, en = sum(allEnr.filter(r => r.f === f.code));
+    return { "Facility": f.label, "District": f.district, "Type": f.cem_site ? "CEM" : "Non-CEM", "Registered": sum(R, "registered"), "Eligible": sum(R, "eligible"),
+      "Given SLDP": sum(R, "given"), "Coverage": pct(sum(R, "given"), sum(R, "eligible")), "Enrolled (all dates)": f.cem_site ? en : null,
+      "vs expected": exp ? pct(en, exp) : null, "Follow-up done": pct(sum(U.filter(r => r.status === "Completed")), sum(U)),
+      "Overdue": f.cem_site ? sum(U.filter(r => r.status === "Overdue")) : null, "AE %": f.cem_site ? pct(sum(S, "ae"), sum(S, "n")) : null,
+      "Issues": sum(allDq.filter(r => r.f === f.code)) };
+  });
+  table("tbScore", [{ label: "Facility" }, { label: "District" }, { label: "Type" }, { label: "Registered", num: 1 }, { label: "Eligible", num: 1 }, { label: "Given SLDP", num: 1 },
+    { label: "Coverage", num: 1, chip: [90, 75], fmt: fmtP }, { label: "Enrolled (all dates)", num: 1 }, { label: "vs expected", num: 1, chip: [90, 70], fmt: fmtP },
+    { label: "Follow-up done", num: 1, chip: [90, 75], fmt: fmtP }, { label: "Overdue", num: 1 }, { label: "AE %", num: 1, fmt: fmtP }, { label: "Issues", num: 1 }], data, { sortable: true });
+}
+function enrolCumOpt() {
+  const ed = F("enrol_day", false); if (!ed.length) return null; const b = base();
+  const sel = selectedFacilities(), facs = FAC().filter(f => sel.has(f.code) && f.cem_site), tot = facs.reduce((s, f) => s + (f.target_total || 0), 0), perDay = tot / (D.meta.protocol.enrol_months * 30.4375);
+  const start = new Date(D.meta.pilot_start + "T00:00:00Z"), today = new Date(D.meta.today + "T00:00:00Z"), endT = new Date(start.getTime() + D.meta.protocol.enrol_months * 30.4375 * 864e5);
+  const m = by(ed, "d"), days = []; let c = 0;
+  for (let t = new Date(start); t <= today; t = new Date(t.getTime() + 864e5)) { const k = t.toISOString().slice(0, 10); c += m.get(k) || 0; days.push([k, c]); }
+  return { textStyle: b.textStyle, grid: Object.assign({}, b.grid, { bottom: 10 }), legend: b.legend,
+    tooltip: Object.assign({}, b.tooltip, { trigger: "axis", valueFormatter: v => fmtN(Math.round(v)) }),
+    xAxis: ax({ type: "time", min: start.getTime(), max: endT.getTime(), splitLine: { show: false } }), yAxis: ax({ type: "value" }),
+    series: [{ name: "Enrolled", type: "line", showSymbol: false, data: days, lineStyle: { width: 2.5, color: css("--s1") }, itemStyle: { color: css("--s1") }, areaStyle: { color: css("--s1"), opacity: .08 } },
+      { name: "Target", type: "line", showSymbol: false, data: [[start.toISOString().slice(0, 10), 0], [endT.toISOString().slice(0, 10), tot]], lineStyle: { type: "dashed", width: 1.5, color: css("--ink-3") }, itemStyle: { color: css("--ink-3") },
+        markLine: { silent: true, symbol: "none", label: { formatter: "Today", color: css("--ink-3"), fontSize: 11 }, lineStyle: { color: css("--border") }, data: [{ xAxis: today.getTime() }] } }] };
 }
 
-/* ---------- COVERAGE ---------- */
-function renderCoverage() {
-  const rw = F("reg_week", true), given = sum(rw, "given");
-  kpis("kpiCoverage", [
-    { k: "SLDP coverage among eligible", v: fmtP(pct(sum(rw, "given_elig"), sum(rw, "eligible"))), d: `${fmtN(sum(rw, "given_elig"))} of ${fmtN(sum(rw, "eligible"))}`, raw: pct(sum(rw, "given_elig"), sum(rw, "eligible")), t: TARGETS.coverage },
-    { k: "Not eligible at screening", v: fmtP(pct(sum(rw, "not_eligible"), sum(rw, "registered"))), d: `${fmtN(sum(rw, "not_eligible"))} patients` },
-    { k: "Screening agrees with clinician", v: fmtP(pct(sum(rw, "agree"), sum(rw, "agree_n"))), d: `${fmtN(sum(rw, "agree_n"))} compared` },
-    { k: "Directly observed", v: fmtP(pct(sum(rw, "dot"), given)), d: `of ${fmtN(given)} given`, raw: pct(sum(rw, "dot"), given), t: TARGETS.dot },
-    { k: "Taken with food", v: fmtP(pct(sum(rw, "food"), given)), d: `of ${fmtN(given)} given` },
-    { k: "Counselled on side effects", v: fmtP(pct(sum(rw, "counselled"), given)), d: `of ${fmtN(given)} given` },
-    { k: "Dose within 0.15-0.4 mg/kg", v: fmtP(pct(sum(rw, "dose_ok"), sum(rw, "dose_n"))), d: `${fmtN(sum(rw, "dose_n"))} doses with a weight` } ]);
+/* ---------- ENROLMENT ---------- */
+function renderEnrolment() {
+  const sel = selectedFacilities(), facs = FAC().filter(f => sel.has(f.code) && f.cem_site), ed = rows(D.enrol_day), me = monthsElapsed();
+  const today = new Date(D.meta.today + "T00:00:00Z"), d28 = new Date(today.getTime() - 27 * 864e5).toISOString().slice(0, 10);
+  const remainDays = Math.max(0, (D.meta.protocol.enrol_months - me) * 30.4375);
+  const data = facs.map(f => { const E = ed.filter(r => r.f === f.code), n = sum(E), last = sum(E.filter(r => r.d >= d28)), exp = Math.min(f.target_total, f.target_month * me);
+    const proj = Math.round(n + last / 28 * remainDays);
+    return { "CEM site": f.label, "District": f.district, "5-month target": f.target_total, "Monthly target": f.target_month, "Expected by today": Math.round(exp), "Enrolled": n,
+      "% of expected": pct(n, exp), "% of 5-month target": pct(n, f.target_total), "Last 28 days": last, "Needed per month to finish": remainDays > 0 ? Math.max(0, Math.ceil((f.target_total - n) / (remainDays / 30.4375))) : null,
+      "Projected at 5 months": proj, "Projected %": pct(proj, f.target_total) }; });
+  const T = k => data.reduce((s, r) => s + (r[k] || 0), 0);
+  const tot = { "CEM site": "All selected CEM sites", "5-month target": T("5-month target"), "Monthly target": T("Monthly target"), "Expected by today": T("Expected by today"), "Enrolled": T("Enrolled"),
+    "% of expected": pct(T("Enrolled"), T("Expected by today")), "% of 5-month target": pct(T("Enrolled"), T("5-month target")), "Last 28 days": T("Last 28 days"),
+    "Needed per month to finish": T("Needed per month to finish"), "Projected at 5 months": T("Projected at 5 months"), "Projected %": pct(T("Projected at 5 months"), T("5-month target")) };
+  kpis("kpiEnrol", [
+    { k: "Enrolled in CEM", v: fmtN(tot["Enrolled"]), d: `of ${fmtN(tot["5-month target"])} target (${fmtP(tot["% of 5-month target"])})` },
+    { k: "Against expected by today", v: fmtP(tot["% of expected"]), d: `${fmtN(tot["Expected by today"])} expected after ${me.toFixed(1)} of ${D.meta.protocol.enrol_months} months`, raw: tot["% of expected"], t: [90, 70] },
+    { k: "Last 28 days", v: fmtN(tot["Last 28 days"]), d: `monthly target ${fmtN(tot["Monthly target"])}`, raw: pct(tot["Last 28 days"], tot["Monthly target"]), t: [90, 70] },
+    { k: "Needed per month to finish", v: fmtN(tot["Needed per month to finish"]), d: `${Math.round(remainDays)} days of enrolment left` },
+    { k: "Projected at 5 months", v: fmtN(tot["Projected at 5 months"]), d: `${fmtP(tot["Projected %"])} of target at the current pace`, raw: tot["Projected %"], t: [95, 80] },
+    { k: "Sites on track", v: `${data.filter(r => (r["% of expected"] || 0) >= 90).length} of ${data.length}`, d: "at 90% of expected or more" }]);
+  const srt = [...data].sort((a, b) => (b["% of expected"] || 0) - (a["% of expected"] || 0));
+  const o = barOpt(srt.map(r => r["CEM site"]), [{ name: "Enrolled", data: srt.map(r => r["Enrolled"]), itemStyle: { color: css("--s1"), borderRadius: [0, 4, 4, 0] },
+    label: { show: true, position: "right", fontSize: 11, color: css("--ink-2"), formatter: p => `${p.value} (${fmtP(srt[p.dataIndex]["% of expected"])})` } },
+    { name: "Expected by today", type: "scatter", symbol: "rect", symbolSize: [3, 22], data: srt.map(r => r["Expected by today"]), itemStyle: { color: css("--ink") } }], { horizontal: true });
+  draw("chSiteTarget", o);
+  // Monthly
+  const mon = new Map(); ed.filter(r => sel.has(r.f) && facs.some(f => f.code === r.f)).forEach(r => mon.set(r.d.slice(0, 7), (mon.get(r.d.slice(0, 7)) || 0) + r.n));
+  const months = [...mon.keys()].sort(), mt = tot["Monthly target"];
+  const om = barOpt(months.map(m => new Date(m + "-01T00:00:00Z").toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" })),
+    [{ name: "Enrolled", data: months.map(m => mon.get(m)), itemStyle: { color: css("--s1") }, label: { show: true, position: "top", fontSize: 11, color: css("--ink-2") },
+       markLine: { silent: true, symbol: "none", lineStyle: { type: "dashed", color: css("--ink-3") }, label: { formatter: `Monthly target ${mt}`, color: css("--ink-3"), fontSize: 11, position: "insideEndTop" }, data: [{ yAxis: mt }] } }], { legend: false });
+  if (om) om.yAxis.max = v => Math.ceil(Math.max(v.max, mt) * 1.12 / 50) * 50;
+  draw("chMonthly", om);
+  table("tbTargets", [{ label: "CEM site" }, { label: "District" }, { label: "5-month target", num: 1 }, { label: "Monthly target", num: 1 }, { label: "Expected by today", num: 1 }, { label: "Enrolled", num: 1 },
+    { label: "% of expected", num: 1, chip: [90, 70], fmt: fmtP }, { label: "% of 5-month target", num: 1, fmt: fmtP }, { label: "Last 28 days", num: 1 }, { label: "Needed per month to finish", num: 1 },
+    { label: "Projected at 5 months", num: 1 }, { label: "Projected %", num: 1, chip: [95, 80], fmt: fmtP }], data, { sortable: true, total: tot });
+}
 
-  const byF = new Map(); rw.forEach(r => { const o = byF.get(r.f) || { e: 0, g: 0 }; o.e += r.eligible; o.g += r.given_elig; byF.set(r.f, o); });
-  const fl = [...byF].filter(([, o]) => o.e > 0).map(([f, o]) => ({ name: facLabel(f), e: o.e, g: o.g, p: pct(o.g, o.e) })).sort((a, b) => a.p - b.p);
-  const covOpt = barOpt(fl.map(x => x.name), [{ name: "Coverage", data: fl.map(x => ({ value: x.p, itemStyle: { color: x.p >= TARGETS.coverage[0] ? css("--s1") : x.p >= TARGETS.coverage[1] ? css("--seq2") : css("--s2") } })),
-    label: { show: true, position: "right", color: css("--ink-2"), fontSize: 11, formatter: p => `${fl[p.dataIndex].g}/${fl[p.dataIndex].e}` } }], { horizontal: true, percent: true, legend: false, max: 110 });
-  $("chCovFac").style.height = Math.max(320, 70 + 22 * fl.length) + "px"; if (charts.chCovFac) charts.chCovFac.resize();
-  if (covOpt) { covOpt.xAxis.axisLabel.formatter = v => v > 100 ? "" : v + "%"; covOpt.legend = { show: false }; }
-  draw("chCovFac", covOpt);
+/* ---------- CASCADE ---------- */
+function renderCascade() {
+  const rg = F("reg"), steps = [["Registered", "registered"], ["Tested", "tested"], ["P. falciparum positive", "pf"], ["Eligible for SLDP", "eligible"], ["ACT dispensed (eligible)", "act"],
+    ["Accepted primaquine", "accepted"], ["Primaquine given", "given"], ["Given at a CEM site", "cem_offered"], ["Enrolled in CEM", "enrolled"]];
+  const v = steps.map(s => sum(rg, s[1]));
+  kpis("kpiCascade", [
+    { k: "Registered", v: fmtN(v[0]), d: `${fmtP(pct(v[1], v[0]))} tested` },
+    { k: "Test positivity (Pf)", v: fmtP(pct(v[2], v[1])), d: `${fmtN(v[2])} of ${fmtN(v[1])} tested` },
+    { k: "Eligible", v: fmtP(pct(v[3], v[2])), d: `${fmtN(v[3])} of Pf positive` },
+    { k: "Accepted primaquine", v: fmtP(pct(v[5], v[4])), d: `${fmtN(v[5])} of ${fmtN(v[4])} offered`, raw: pct(v[5], v[4]), t: [90, 80] },
+    { k: "Given (of eligible)", v: fmtP(pct(v[6], v[3])), d: `${fmtN(v[6])} given`, raw: pct(v[6], v[3]), t: [90, 75] },
+    { k: "Enrolled in CEM", v: fmtP(pct(v[8], v[7])), d: `${fmtN(v[8])} of ${fmtN(v[7])} given at CEM sites`, raw: pct(v[8], v[7]), t: [90, 75] }]);
+  const o = barOpt(steps.map(s => s[0]), [{ name: "Patients", data: v, itemStyle: { color: css("--s1"), borderRadius: [0, 4, 4, 0] },
+    label: { show: true, position: "right", fontSize: 11, color: css("--ink-2"), formatter: p => `${fmtN(p.value)}${p.dataIndex ? " (" + fmtP(pct(p.value, v[p.dataIndex === 7 ? 6 : p.dataIndex - 1])) + ")" : ""}` } }], { horizontal: true, legend: false });
+  draw("chCascade", o);
+  draw("chNotElig", rankOpt(by(F("not_elig"), "reason"), css("--s2")));
+  draw("chRefusal", rankOpt(by(F("refusal"), "reason"), css("--s2")));
+  draw("chNotDisp", rankOpt(by(F("not_disp"), "reason"), css("--serious")));
+  const tst = F("tests"), types = uniq(tst.map(r => r.test));
+  draw("chTests", barOpt(types, [{ name: "Tested", data: types.map(t => sum(tst.filter(r => r.test === t))), itemStyle: { color: css("--neutral") } },
+    { name: "P. falciparum positive", data: types.map(t => sum(tst.filter(r => r.test === t && r.pf))), itemStyle: { color: css("--s1") } }], { labels: true }));
+  const ages = ["Under 5", "5-14", "15 and over"];
+  draw("chAgeSex", barOpt(ages, [
+    { name: "Female registered", data: ages.map(a => sum(rg.filter(r => r.age === a && r.sex === "female"), "registered")), itemStyle: { color: css("--seq1") }, stack: "f" },
+    { name: "Female given", data: ages.map(a => sum(rg.filter(r => r.age === a && r.sex === "female"), "given")), itemStyle: { color: css("--s1") } },
+    { name: "Male registered", data: ages.map(a => sum(rg.filter(r => r.age === a && r.sex === "male"), "registered")), itemStyle: { color: "#f6c2a8" } },
+    { name: "Male given", data: ages.map(a => sum(rg.filter(r => r.age === a && r.sex === "male"), "given")), itemStyle: { color: css("--s2") } }]));
+  const sel = selectedFacilities();
+  const data = FAC().filter(f => sel.has(f.code)).map(f => { const R = rg.filter(r => r.f === f.code); const g = k => sum(R, k);
+    return { "Facility": f.label, "Registered": g("registered"), "Tested": g("tested"), "Pf positive": g("pf"), "Eligible": g("eligible"), "Accepted": g("accepted"), "Given": g("given"),
+      "Coverage": pct(g("given"), g("eligible")), "Declined": g("act") - g("accepted"), "Enrolled CEM": f.cem_site ? g("enrolled") : null, "Enrolment %": f.cem_site ? pct(g("enrolled"), g("cem_offered")) : null }; })
+    .filter(r => r.Registered > 0);
+  table("tbCascade", [{ label: "Facility" }, { label: "Registered", num: 1 }, { label: "Tested", num: 1 }, { label: "Pf positive", num: 1 }, { label: "Eligible", num: 1 }, { label: "Accepted", num: 1 },
+    { label: "Given", num: 1 }, { label: "Coverage", num: 1, chip: [90, 75], fmt: fmtP }, { label: "Declined", num: 1 }, { label: "Enrolled CEM", num: 1 }, { label: "Enrolment %", num: 1, chip: [90, 75], fmt: fmtP }], data, { sortable: true });
+}
 
-  const cg = F("cov_group"), lv = []; ["Age group", "Sex"].forEach(dim => { const m = new Map(); cg.filter(r => r.dim === dim).forEach(r => { const o = m.get(r.level) || { e: 0, g: 0 }; o.e += r.eligible; o.g += r.given; m.set(r.level, o); });
-    const order = ["<5", "5-14", "15-24", "25-44", "45+"]; [...m].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])).forEach(([l, o]) => lv.push({ name: (dim === "Age group" ? "Age " + l : l), dim, ...o })); });
-  draw("chCovGroup", barOpt(lv.map(x => x.name), [{ name: "Coverage", data: lv.map(x => ({ value: pct(x.g, x.e), itemStyle: { color: x.dim === "Sex" ? css("--s2") : css("--s1") } })),
-    label: { show: true, position: "right", fontSize: 11, color: css("--ink-2"), formatter: p => `${pct(lv[p.dataIndex].g, lv[p.dataIndex].e)}%  (${lv[p.dataIndex].g}/${lv[p.dataIndex].e})` } }], { horizontal: true, percent: true, legend: false, max: 125 }));
-  if (charts.chCovGroup) charts.chCovGroup.setOption({ xAxis: { axisLabel: { formatter: v => v > 100 ? "" : v + "%" } } });
-
-  const rs = [...groupSum(F("reasons"), "reason", "n")].sort((a, b) => b[1] - a[1]);
-  draw("chReasons", barOpt(rs.map(r => r[0]), [{ name: "Patients", data: rs.map(r => r[1]), itemStyle: { color: css("--s1") }, label: { show: true, position: "right", color: css("--ink-2"), fontSize: 11 } }], { horizontal: true, legend: false }));
-  const rf = [...groupSum(F("refusal"), "reason", "n")].sort((a, b) => b[1] - a[1]);
-  draw("chRefusal", barOpt(rf.map(r => r[0]), [{ name: "Patients", data: rf.map(r => r[1]), itemStyle: { color: css("--s2") }, label: { show: true, position: "right", color: css("--ink-2"), fontSize: 11 } }], { horizontal: true, legend: false }));
-
-  const dh = groupSum(F("dose_hist"), "bin", "n"); const bins = []; for (let x = 0; x <= 0.6001; x += 0.025) bins.push(Math.round(x * 1000) / 1000);
-  const th = D.meta.thresholds, i0 = bins.indexOf(th.dose_low), i1 = bins.indexOf(th.dose_high) - 1;
-  const dOpt = dh.size ? barOpt(bins.map(b => b.toFixed(3)), [{ name: "Patients", barCategoryGap: "8%",
-    data: bins.map(b => ({ value: dh.get(b) || 0, itemStyle: { color: (b >= th.dose_low && b < th.dose_high) ? css("--s1") : css("--s2") } })),
-    markArea: { silent: true, itemStyle: { color: "rgba(42,120,214,.07)" }, data: [[{ xAxis: bins[i0].toFixed(3) }, { xAxis: bins[i1].toFixed(3) }]] },
-    markLine: { silent: true, symbol: "none", lineStyle: { type: "dashed", color: css("--ink-3") }, label: { formatter: "0.25 target", color: css("--ink-3") }, data: [{ xAxis: "0.250" }] } }], { legend: false }) : null;
-  if (dOpt) { dOpt.xAxis.name = "mg base per kg (bin start)"; dOpt.xAxis.nameLocation = "middle"; dOpt.xAxis.nameGap = 28; dOpt.grid.bottom = 26; dOpt.grid.top = 26; dOpt.xAxis.axisLabel.interval = 3; dOpt.xAxis.axisLabel.hideOverlap = true;
-    dOpt.tooltip.formatter = p => `<b>${p[0].value} patients</b><br>${p[0].name} to ${(+p[0].name + 0.025).toFixed(3)} mg/kg`; }
-  draw("chDose", dOpt);
+/* ---------- DOSING ---------- */
+function renderDosing() {
+  const rg = F("reg"), given = sum(rg, "given"), ok = sum(rg, "dose_ok"), flag = sum(rg, "dose_flag"), dot = sum(rg, "dot"), cou = sum(rg, "counselled");
+  const bs = F("dose_basis");
+  kpis("kpiDosing", [
+    { k: "Primaquine given", v: fmtN(given) },
+    { k: "Dose matches a table", v: fmtP(pct(ok, given)), d: `${fmtN(flag)} dose(s) matched neither table`, raw: pct(ok, given), t: [98, 95] },
+    { k: "Dosed by the SLDP weight table", v: fmtP(pct(sum(bs.filter(r => ["SLDP weight table", "Both tables agree"].includes(r.basis))), given)), d: "including doses where both tables agree" },
+    { k: "Directly observed", v: fmtP(pct(dot, given)), d: `${fmtN(dot)} of ${fmtN(given)}`, raw: pct(dot, given), t: [90, 75] },
+    { k: "Counselled", v: fmtP(pct(cou, given)), d: `${fmtN(cou)} of ${fmtN(given)}`, raw: pct(cou, given), t: [95, 85] }]);
+  const order = ["SLDP weight table", "Both tables agree", "ACT table", "Neither table", "Not recorded"], m = by(bs, "basis");
+  const cols = { "SLDP weight table": css("--s1"), "Both tables agree": css("--s3"), "ACT table": css("--warning"), "Neither table": css("--critical"), "Not recorded": css("--neutral") };
+  const ob = order.filter(k => m.get(k));
+  draw("chBasis", ob.length ? { textStyle: base().textStyle, tooltip: Object.assign({}, base().tooltip, { trigger: "item" }), legend: Object.assign({}, base().legend, { top: "bottom" }),
+    series: [{ type: "pie", radius: ["48%", "72%"], center: ["50%", "45%"], itemStyle: { borderColor: css("--surface"), borderWidth: 2 }, label: { color: css("--ink-2"), formatter: "{b}\n{c} ({d}%)" },
+      data: ob.map(k => ({ name: k, value: m.get(k), itemStyle: { color: cols[k] } })) }] } : null);
+  const h = by(F("mgkg_hist", false), "bin"), bins = [...h.keys()].sort((a, b) => a - b);
+  const om = barOpt(bins.map(b => b.toFixed(2)), [{ name: "Patients", data: bins.map(b => h.get(b)), itemStyle: { color: css("--s1") }, barCategoryGap: "8%",
+    markLine: { silent: true, symbol: "none", lineStyle: { type: "dashed", color: css("--ink-3") }, label: { formatter: "0.25", color: css("--ink-3") }, data: [{ xAxis: (0.25).toFixed(2) }] } }], { legend: false });
+  if (om) { om.xAxis.name = "mg/kg (bin start)"; om.xAxis.nameLocation = "middle"; om.xAxis.nameGap = 26; om.grid.bottom = 26; }
+  draw("chMgkg", om);
+  const db = F("dose_band", false), bands = ["<10 kg", "10-14 kg", "15-29 kg", "30-59 kg", "60+ kg"].filter(b => db.some(r => r.band === b)), doses = ["1/8 tablet", "1/4 tablet", "1/2 tablet", "1 tablet"];
+  const dl = uniq(db.map(r => r.dose)); const dcol = [css("--seq1"), css("--seq2"), css("--seq3"), css("--seq4"), css("--neutral")];
+  draw("chDoseBand", barOpt(bands, dl.sort((a, b) => (parseFloat(a) || 99) - (parseFloat(b) || 99)).map((d, i) => ({ name: d, data: bands.map(b => sum(db.filter(r => r.band === b && r.dose === d))), itemStyle: { color: dcol[i % dcol.length] } })), { stack: true }));
+  draw("chAct", rankOpt(by(F("act"), "act"), css("--s3")));
+  const sel = selectedFacilities();
+  table("tbDosing", [{ label: "Facility" }, { label: "Given", num: 1 }, { label: "Matches a table", num: 1, chip: [98, 95], fmt: fmtP }, { label: "Matched neither", num: 1 },
+    { label: "SLDP table", num: 1, fmt: fmtP }, { label: "ACT table", num: 1, fmt: fmtP }, { label: "Observed (DOT)", num: 1, chip: [90, 75], fmt: fmtP }, { label: "Counselled", num: 1, chip: [95, 85], fmt: fmtP }],
+    FAC().filter(f => sel.has(f.code)).map(f => { const R = rg.filter(r => r.f === f.code), B = bs.filter(r => r.f === f.code), g = sum(R, "given");
+      return { "Facility": f.label, "Given": g, "Matches a table": pct(sum(R, "dose_ok"), g), "Matched neither": sum(R, "dose_flag"),
+        "SLDP table": pct(sum(B.filter(r => ["SLDP weight table", "Both tables agree"].includes(r.basis))), g), "ACT table": pct(sum(B.filter(r => r.basis === "ACT table")), g),
+        "Observed (DOT)": pct(sum(R, "dot"), g), "Counselled": pct(sum(R, "counselled"), g) }; }).filter(r => r.Given > 0), { sortable: true });
 }
 
 /* ---------- FOLLOW-UP ---------- */
 function renderFollowup() {
-  const fu = F("followup"), ot = F("on_time"), od = F("overdue_age"), ret = F("retention"), ph = F("phone");
-  const due = fu.filter(r => ["Completed", "Due now", "Overdue"].includes(r.status)), done = sum(due.filter(r => r.status === "Completed"), "n");
-  const fc = pct(done, sum(due, "n"));
+  const fu = F("fu"), dueSt = ["Completed", "Due now", "Overdue", "Missed"], due = fu.filter(r => dueSt.includes(r.status)), done = sum(due.filter(r => r.status === "Completed"));
+  const ex = F("exits", false), cs = F("consent", false), at = F("attempts", false);
+  const tm = F("fu_time", false), ontime = sum(tm.filter(r => r.timing === "On time"));
+  const phoneDue = due.filter(r => ["d7", "d14", "d28"].includes(r.visit)), cohort = sum(ex), ltfu = sum(ex.filter(r => r.status.startsWith("Meets LTFU") || r.status.startsWith("Lost")));
   kpis("kpiFollow", [
-    { k: "Due visits completed", v: fmtP(fc), d: `${fmtN(done)} of ${fmtN(sum(due, "n"))}`, raw: fc, t: TARGETS.followup },
-    { k: "Completed on time", v: fmtP(pct(sum(ot, "on_time"), sum(ot, "completed"))), d: "within the grace window" },
-    { k: "Overdue now", v: fmtN(sum(fu.filter(r => r.status === "Overdue"), "n")), d: `${fmtN(sum(fu.filter(r => r.status === "Due now"), "n"))} more due now` },
-    { k: "Telephone calls reaching the patient", v: fmtP(pct(sum(ph.filter(r => r.outcome === "Reached"), "n"), sum(ph, "n"))), d: `${fmtN(sum(ph, "n"))} calls` },
-    { k: "Retained to Day 28", v: fmtP(pct(sum(ret, "d28"), sum(ret, "closed"))), d: `${fmtN(sum(ret, "closed"))} past the Day 28 window` },
-    { k: "Lost, withdrawn or died", v: fmtN(sum(ret, "lost") + sum(ret, "withdrawn") + sum(ret, "died")), d: `${sum(ret, "lost")} lost · ${sum(ret, "withdrawn")} withdrawn · ${sum(ret, "died")} died` },
-    { k: "No baseline date", v: fmtN(sum(fu.filter(r => r.status === "No baseline date"), "n") / 5), d: "enrolled patients to resolve" } ]);
-  const sc = SC(), present = STATUS_ORDER.filter(s => fu.some(r => r.status === s));
-  draw("chFollow", fu.length ? barOpt(VISIT_ORDER.map(v => VISIT[v]), present.map(s => ({ name: s, itemStyle: { color: sc[s] },
-    data: VISIT_ORDER.map(v => sum(fu.filter(r => r.visit === v && r.status === s), "n")) })), { stack: true }) : null);
-  const bands = ["1-3 days", "4-7 days", "8-14 days", "Over 14 days"], bc = [css("--seq1"), css("--seq2"), css("--seq3"), css("--seq4")];
-  draw("chOverdue", od.length ? barOpt(VISIT_ORDER.map(v => VISIT[v]), bands.map((b, i) => ({ name: b, itemStyle: { color: bc[i] },
-    data: VISIT_ORDER.map(v => sum(od.filter(r => r.visit === v && r.band === b), "n")) })), { stack: true }) : null);
-  const vw = F("visits_week", true), weeks = [...new Set(vw.map(r => r.w))].sort(), b = base();
-  const wl = weeks.map(w => new Date(w + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" }));
-  const grp = [["In person (Day 0, Day 3)", ["d0", "d3"], css("--s1")], ["Telephone (Day 7, 14, 28)", ["d7", "d14", "d28"], css("--s2")], ["Unscheduled", ["unscheduled"], css("--neutral-2")]];
-  draw("chVisitWeek", weeks.length ? { textStyle: b.textStyle, grid: b.grid, legend: b.legend, tooltip: Object.assign({}, b.tooltip, { trigger: "axis" }),
-    xAxis: ax({ type: "category", data: wl, boundaryGap: false, splitLine: { show: false } }), yAxis: ax({ type: "value", minInterval: 1 }),
-    series: grp.filter(([, vs]) => vw.some(r => vs.includes(r.visit))).map(([n, vs, c]) => ({ name: n, type: "line", symbolSize: 8, lineStyle: { width: 2, color: c }, itemStyle: { color: c, borderColor: css("--surface"), borderWidth: 2 },
-      data: weeks.map(w => sum(vw.filter(r => r.w === w && vs.includes(r.visit)), "n")) })) } : null);
-  const outs = [...groupSum(ph, "outcome", "n")].sort((a, b) => (a[0] === "Reached" ? -1 : b[0] === "Reached" ? 1 : b[1] - a[1])).map(x => x[0]);
-  const pv = ["d7", "d14", "d28", "unscheduled"].filter(v => ph.some(r => r.visit === v)), oc = [css("--s1"), css("--s2"), css("--seq2"), css("--neutral-2"), css("--neutral"), css("--seq4")];
-  draw("chPhone", ph.length ? barOpt(pv.map(v => VISIT[v]), outs.map((o, i) => ({ name: o, itemStyle: { color: oc[i % oc.length] }, data: pv.map(v => sum(ph.filter(r => r.visit === v && r.outcome === o), "n")) })), { stack: true }) : null);
-  table("tbFollow", [{ label: "Visit" }, { label: "Mode" }, { label: "Due", num: 1 }, { label: "Completed", num: 1 }, { label: "Completion %", num: 1, chip: TARGETS.followup, fmt: v => v == null ? "–" : v.toFixed(1) },
-    { label: "On time %", num: 1, fmt: v => v == null ? "–" : v.toFixed(1) }, { label: "Due now", num: 1 }, { label: "Overdue", num: 1 }],
-    VISIT_ORDER.map(v => { const R = fu.filter(r => r.visit === v), d = R.filter(r => ["Completed", "Due now", "Overdue"].includes(r.status)), c = sum(R.filter(r => r.status === "Completed"), "n"), O = ot.filter(r => r.visit === v);
-      return { "Visit": VISIT[v], "Mode": ["d0", "d3"].includes(v) ? "In person" : "Telephone", "Due": sum(d, "n"), "Completed": c, "Completion %": pct(c, sum(d, "n")),
-        "On time %": pct(sum(O, "on_time"), sum(O, "completed")), "Due now": sum(R.filter(r => r.status === "Due now"), "n"), "Overdue": sum(R.filter(r => r.status === "Overdue"), "n") }; }).filter(r => r.Due > 0));
+    { k: "Participants (consented)", v: fmtN(cohort), d: `${fmtN(sum(cs.filter(r => r.consent === "Declined at Day 0")))} declined CEM at Day 0 · ${fmtN(sum(cs.filter(r => r.consent === "No Day 0 form yet")))} without a Day 0 form` },
+    { k: "Contacts completed", v: fmtP(pct(done, sum(due))), d: `${fmtN(done)} of ${fmtN(sum(due))} due`, raw: pct(done, sum(due)), t: [90, 75] },
+    { k: "Day 3 visit done", v: fmtP(pct(sum(due.filter(r => r.visit === "d3" && r.status === "Completed")), sum(due.filter(r => r.visit === "d3")))), raw: pct(sum(due.filter(r => r.visit === "d3" && r.status === "Completed")), sum(due.filter(r => r.visit === "d3"))), t: [90, 75] },
+    { k: "Telephone contacts done", v: fmtP(pct(sum(phoneDue.filter(r => r.status === "Completed")), sum(phoneDue))), d: "Day 7, 14 and 28", raw: pct(sum(phoneDue.filter(r => r.status === "Completed")), sum(phoneDue)), t: [90, 75] },
+    { k: "Completed on time", v: fmtP(pct(ontime, sum(tm))), d: "within the grace window", raw: pct(ontime, sum(tm)), t: [85, 70] },
+    { k: "Completed Day 28", v: fmtN(sum(ex.filter(r => r.status === "Completed Day 28"))), d: `${fmtN(sum(ex.filter(r => r.status === "In follow-up")))} still in follow-up` },
+    { k: "Lost or meeting LTFU definition", v: fmtN(ltfu), d: `${fmtP(pct(ltfu, cohort))} of participants · ${fmtN(sum(ex.filter(r => r.status === "Withdrawn")))} withdrew`, alarm: ltfu > 0, alarmText: "Confirm and close" }]);
+  const sts = ["Completed", "Due now", "Overdue", "Missed", "Upcoming (7 days)", "Not yet due", "Exited", "No Day 0 date"].filter(s => fu.some(r => r.status === s));
+  draw("chFollow", barOpt(VIS.map(v => v[1]), sts.map(s => ({ name: s, data: VIS.map(([v]) => sum(fu.filter(r => r.visit === v && r.status === s))), itemStyle: { color: SC()[s] } })), { stack: true }));
+  const exc = { "Completed Day 28": css("--good"), "In follow-up": css("--seq2"), "Withdrawn": css("--neutral-2"), "Meets LTFU definition (not closed)": css("--serious"), "Lost to follow-up (closed)": css("--critical"), "Died": css("--ink") };
+  const em = by(ex, "status"); const ek = Object.keys(exc).filter(k => em.get(k));
+  draw("chExits", ek.length ? { textStyle: base().textStyle, tooltip: Object.assign({}, base().tooltip, { trigger: "item" }), legend: Object.assign({}, base().legend, { top: "bottom" }),
+    series: [{ type: "pie", radius: ["48%", "72%"], center: ["50%", "44%"], itemStyle: { borderColor: css("--surface"), borderWidth: 2 }, label: { color: css("--ink-2"), formatter: "{c} ({d}%)" },
+      data: ek.map(k => ({ name: k, value: em.get(k), itemStyle: { color: exc[k] } })) }] } : null);
+  const cl = F("calls"), cw = weeksOf(cl), res = uniq(cl.map(r => r.result)).sort((a, b) => a === "Reached" ? -1 : b === "Reached" ? 1 : 0);
+  const rc = [css("--good"), css("--warning"), css("--serious"), css("--critical"), css("--neutral")];
+  draw("chCalls", barOpt(cw.map(wlab), res.map((r, i) => ({ name: r, data: cw.map(w => sum(cl.filter(x => x.w === w && x.result === r))), itemStyle: { color: rc[i % rc.length] } })), { stack: true }));
+  const tries = [1, 2, 3, 4];
+  draw("chAttempts", barOpt(["1 call", "2 calls", "3 calls", "4 or more"], [
+    { name: "Reached", data: tries.map(t => sum(at.filter(r => r.tries === t && r.reached))), itemStyle: { color: css("--good") } },
+    { name: "Not reached yet", data: tries.map(t => sum(at.filter(r => r.tries === t && !r.reached))), itemStyle: { color: css("--serious") } }], { stack: true }));
+  const tms = ["On time", "Late", "Early"], tcol = { "On time": css("--good"), "Late": css("--warning"), "Early": css("--seq2") };
+  draw("chTiming", barOpt(VIS.map(v => v[1]), tms.map(t => ({ name: t, data: VIS.map(([v]) => sum(tm.filter(r => r.visit === v && r.timing === t))), itemStyle: { color: tcol[t] } })), { stack: true }));
+  const oa = F("overdue_age", false), ages = ["1-3 days", "4-7 days", "8-14 days", "Over 14 days"], acol = [css("--warning"), css("--serious"), css("--critical"), "#8c1d1d"];
+  draw("chOverdue", barOpt(VIS.map(v => v[1]), ages.map((a, i) => ({ name: a, data: VIS.map(([v]) => sum(oa.filter(r => r.visit === v && r.age === a))), itemStyle: { color: acol[i] } })), { stack: true }));
+  const sel = selectedFacilities();
+  const data = FAC().filter(f => sel.has(f.code) && f.cem_site).map(f => { const U = due.filter(r => r.f === f.code), o = { "Facility": f.label };
+    VIS.forEach(([v, l]) => { const d = U.filter(r => r.visit === v); o[l] = pct(sum(d.filter(r => r.status === "Completed")), sum(d)); o[l + "_n"] = `${sum(d.filter(r => r.status === "Completed"))}/${sum(d)}`; });
+    o["All contacts"] = pct(sum(U.filter(r => r.status === "Completed")), sum(U)); o["Overdue"] = sum(U.filter(r => r.status === "Overdue")); o["Missed"] = sum(U.filter(r => r.status === "Missed")); return o; });
+  table("tbFollow", [{ label: "Facility" }, ...VIS.map(([, l]) => ({ label: l, num: 1, chip: [90, 75], fmt: (v, r) => v == null ? "–" : `${fmtP(v)} · ${r[l + "_n"]}` })),
+    { label: "All contacts", num: 1, chip: [90, 75], fmt: fmtP }, { label: "Overdue", num: 1 }, { label: "Missed", num: 1 }], data, { sortable: true });
 }
 
 /* ---------- SAFETY ---------- */
+function evSplit(src) { return F("ev").filter(r => r.src === src); }
 function renderSafety() {
-  const ev = F("events", true), sae = F("sae"), inc = F("incidence"), hb = F("hb"), d3 = F("d3_test");
-  const ser = sum(sae, "serious");
+  const ev = evSplit("cem"), sf = F("safety", false), n = sum(sf, "n"), pd = sum(sf, "pdays"), ae = sum(sf, "ae"), nev = sum(ev);
+  const hbp = sum(sf, "hb_pairs"), hbd = sum(sf, "hb_drop");
+  const pois = (x, t) => { if (!t) return "–"; const lo = x ? 0.5 * chi2inv(0.025, 2 * x) : 0, hi = 0.5 * chi2inv(0.975, 2 * x + 2); return `${(1000 * x / t).toFixed(2)} (${(1000 * lo / t).toFixed(2)} to ${(1000 * hi / t).toFixed(2)})`; };
   kpis("kpiSafety", [
-    { k: "Adverse events", v: fmtN(sum(ev, "n")), d: "distinct Event IDs in period" },
-    { k: "Serious adverse events", v: fmtN(sum(ev.filter(r => r.serious), "n")), d: `${fmtN(sum(sae, "hospitalised"))} hospitalised (all dates)` },
-    { k: "SAEs sent to pharmacovigilance", v: fmtP(pct(sum(sae, "serious_pv"), ser)), d: `${fmtN(sum(sae, "serious_pv"))} of ${fmtN(ser)}`, raw: pct(sum(sae, "serious_pv"), ser), t: [100, 100] },
-    { k: "Reported within 2 days of onset", v: fmtP(pct(sum(sae, "lag_ok"), sum(sae, "lag_n"))), d: `${fmtN(sum(sae, "lag_n"))} events with an onset date` },
-    { k: "Mean Hb change, Day 0 to 3", v: sum(hb, "pairs") ? ((sum(hb, "sum_d3") - sum(hb, "sum_d0")) / sum(hb, "pairs")).toFixed(2) + " g/dL" : "–", d: `${fmtN(sum(hb, "pairs"))} patients with both values` },
-    { k: "Hb fall of 2 g/dL or more", v: fmtN(sum(hb, "alert")), d: `${fmtP(pct(sum(hb, "alert"), sum(hb, "pairs")))} of pairs` },
-    { k: "Patients with haemolysis signs", v: fmtN(sum(inc, "haemolysis")), d: "dark urine or jaundice reported" },
-    { k: "Day 3 microscopy positive", v: fmtP(pct(sum(d3, "micro_pos"), sum(d3, "micro_n"))), d: `${fmtN(sum(d3, "micro_n"))} read on Day 3` } ]);
-  const weeks = [...new Set(ev.map(r => r.w))].sort(), wl = weeks.map(w => new Date(w + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" }));
-  const ints = [["mild", css("--seq2")], ["moderate", css("--seq3")], ["severe", css("--seq4")], ["Not recorded", css("--neutral")]].filter(([i]) => ev.some(r => r.intensity === i));
-  draw("chEvents", ev.length ? barOpt(wl, ints.map(([i, c]) => ({ name: SENT(i), itemStyle: { color: c }, data: weeks.map(w => sum(ev.filter(r => r.w === w && r.intensity === i), "n")) })), { stack: true }) : null);
-  const arms = ["SLDP given", "SLDP not given"];
-  const io = barOpt(arms, [{ name: "Any adverse event", itemStyle: { color: css("--s1") }, data: arms.map(a => pct(sum(inc.filter(r => r.arm === a), "with_event"), sum(inc.filter(r => r.arm === a), "patients"))),
-      label: { show: true, position: "top", fontSize: 11, color: css("--ink-2"), formatter: p => `${p.value}% (${sum(inc.filter(r => r.arm === arms[p.dataIndex]), "with_event")}/${sum(inc.filter(r => r.arm === arms[p.dataIndex]), "patients")})` } },
-    { name: "Serious adverse event", itemStyle: { color: css("--s2") }, data: arms.map(a => pct(sum(inc.filter(r => r.arm === a), "with_sae"), sum(inc.filter(r => r.arm === a), "patients"))),
-      label: { show: true, position: "top", fontSize: 11, color: css("--ink-2"), formatter: "{c}%" } }], { percent: true });
-  draw("chIncidence", inc.length ? io : null);
-  const hh = groupSum(F("hb_hist"), "bin", "n"), hbins = []; for (let x = -5; x <= 3; x += 0.5) hbins.push(x);
-  const hOpt = hh.size ? barOpt(hbins.map(b => (b > 0 ? "+" : "") + b.toFixed(1)), [{ name: "Patients", barCategoryGap: "8%",
-    data: hbins.map(b => ({ value: hh.get(b) || 0, itemStyle: { color: b + 0.5 <= -D.meta.thresholds.hb_drop ? css("--critical") : css("--s1") } })) }], { legend: false }) : null;
-  if (hOpt) { hOpt.xAxis.name = "Change in Hb, g/dL (bin start)"; hOpt.xAxis.nameLocation = "middle"; hOpt.xAxis.nameGap = 28; hOpt.grid.bottom = 26;
-    hOpt.tooltip.formatter = p => `<b>${p[0].value} patients</b><br>${p[0].name} to ${(+p[0].name + 0.5).toFixed(1)} g/dL`; }
-  draw("chHb", hOpt);
-  const sy = F("symptoms"), syms = Object.keys(SYMPTOM).filter(s => sy.some(r => r.symptom === s)), vs = ["d7", "d14", "d28", "unscheduled"].filter(v => sy.some(r => r.visit === v));
-  const cell = []; syms.forEach((s, j) => vs.forEach((v, i) => { const R = sy.filter(r => r.symptom === s && r.visit === v), n = sum(R, "n"), y = sum(R, "yes"); cell.push([i, j, pct(y, n), y, n]); }));
-  const b = base(), mx = Math.max(10, ...cell.map(c => c[2] || 0));
-  draw("chSymptoms", cell.length ? { textStyle: b.textStyle, grid: Object.assign({}, b.grid, { top: 8, bottom: 40 }),
-    tooltip: Object.assign({}, b.tooltip, { formatter: p => `<b>${p.value[2] == null ? "–" : p.value[2] + "%"}</b> said yes<br>${SYMPTOM[syms[p.value[1]]]}, ${VISIT[vs[p.value[0]]]}<br><span style="color:${css("--ink-3")}">${p.value[3]} of ${p.value[4]}</span>` }),
-    xAxis: ax({ type: "category", data: vs.map(v => VISIT[v]), splitLine: { show: false } }), yAxis: ax({ type: "category", data: syms.map(s => SYMPTOM[s]), splitLine: { show: false } }),
-    visualMap: { dimension: 2, min: 0, max: mx, calculable: false, orient: "horizontal", left: "center", bottom: 0, itemHeight: 140, itemWidth: 10, text: [mx.toFixed(0) + "%", "0%"], textStyle: { color: css("--ink-3"), fontSize: 11 },
-      inRange: { color: [css("--surface-2"), css("--seq2"), css("--seq4")] } },
-    series: [{ type: "heatmap", data: cell.map(c => ({ value: c, label: { color: (c[2] || 0) > 0.6 * mx ? "#ffffff" : css("--ink") } })), label: { show: true, fontSize: 11, color: css("--ink"), formatter: p => p.value[2] == null ? "" : p.value[2] + "%" }, itemStyle: { borderColor: css("--surface"), borderWidth: 2, borderRadius: 3 } }] } : null);
-  const tb = new Map(); F("events").forEach(r => { const k = [SENT(r.intensity), r.serious ? "Yes" : "No", SENT(r.outcome)].join("|"); tb.set(k, (tb.get(k) || 0) + r.n); });
-  table("tbEvents", [{ label: "Highest intensity" }, { label: "Serious" }, { label: "Latest outcome" }, { label: "Events", num: 1 }],
-    [...tb].sort((a, b) => b[1] - a[1]).map(([k, n]) => { const [i, s, o] = k.split("|"); return { "Highest intensity": i, "Serious": s, "Latest outcome": o, "Events": n }; }));
+    { k: "CEM participants", v: fmtN(n), d: `${fmtN(Math.round(pd))} person-days of follow-up` },
+    { k: "Participants with an AE", v: fmtP(pct(ae, n)), d: `95% CI ${n ? exactCI(ae, n).map(v => v.toFixed(1)).join(" to ") : "–"}` },
+    { k: "AE rate per 1,000 person-days", v: pd ? (1000 * nev / pd).toFixed(1) : "–", d: `${fmtN(nev)} events in the selected period` },
+    { k: "Severe events", v: fmtN(sum(ev.filter(r => r.intensity === "Severe"))), d: `${fmtP(pct(sum(ev.filter(r => r.intensity === "Severe")), nev))} of events` },
+    { k: "Serious (SAE)", v: fmtN(sum(ev.filter(r => r.serious))), d: `${fmtN(sum(ev.filter(r => r.hospitalised)))} hospitalised · ${fmtN(sum(ev.filter(r => r.death)))} died`, alarm: sum(ev.filter(r => r.serious)) > 0, alarmText: "Review with the safety team" },
+    { k: "Primaquine suspected", v: fmtP(pct(sum(ev.filter(r => r.sus_sldp)), nev)), d: `${fmtN(sum(ev.filter(r => r.sus_sldp)))} of ${fmtN(nev)} events` },
+    { k: "Hb fall of 2 g/dL or more", v: fmtN(hbd), d: `${n ? propTxt(hbd, hbp) : "–"} of ${fmtN(hbp)}`, alarm: hbd > 0, alarmText: "Check each case" },
+    { k: "Mean Hb change Day 0 to 3", v: hbp ? (sum(sf, "hb_sum") / hbp).toFixed(2) + " g/dL" : "–", d: `${fmtN(sum(sf, "haem"))} participants with any sign of haemolysis` }]);
+  const ws = weeksOf(ev), ints = ["Mild", "Moderate", "Severe", "Not recorded"].filter(i => ev.some(r => r.intensity === i));
+  draw("chEvWeek", barOpt(ws.map(wlab), ints.map(i => ({ name: i, data: ws.map(w => sum(ev.filter(r => r.w === w && r.intensity === i))), itemStyle: { color: INT()[i] } })), { stack: true }));
+  const on = F("ev_onset", false).filter(r => r.src === "cem"), od = Array.from({ length: 29 }, (_, i) => i);
+  const oo = barOpt(od.map(String), [{ name: "Events", data: od.map(d => sum(on.filter(r => r.day === d))), itemStyle: { color: css("--s2") }, barCategoryGap: "10%" }], { legend: false });
+  if (oo) { oo.xAxis.name = "Days after primaquine"; oo.xAxis.nameLocation = "middle"; oo.xAxis.nameGap = 26; oo.grid.bottom = 26; oo.xAxis.axisLabel.interval = 6; }
+  draw("chOnset", oo);
+  draw("chSigns", rankOpt(by(F("ev_signs", false).filter(r => r.src === "cem"), "sign"), css("--s2"), { top: 15 }));
+  draw("chOutcome", rankOpt(by(ev, "outcome"), css("--s3")));
+  draw("chCrit", rankOpt(by(F("ev_crit", false).filter(r => r.src === "cem"), "criterion"), css("--critical")));
+  const hh = F("hb_hist", false), hb = by(hh, "bin"), bins = [...hb.keys()].sort((a, b) => a - b);
+  const oh = barOpt(bins.map(b => (b > 0 ? "+" : "") + b.toFixed(1)), [{ name: "Participants", barCategoryGap: "6%", data: bins.map(b => ({ value: hb.get(b), itemStyle: { color: b <= -2 ? css("--critical") : css("--s1") } })) }], { legend: false });
+  if (oh) { oh.xAxis.name = "Change in Hb (g/dL); each bar covers the 0.5 g/dL up to its label"; oh.xAxis.nameLocation = "middle"; oh.xAxis.nameGap = 26; oh.grid.bottom = 26; }
+  draw("chHb", oh);
+  const sy = F("symptoms", false), keys = [["dark_urine", "Dark urine"], ["jaundice", "Jaundice"], ["pallor", "Pallor"], ["fatigue", "Fatigue / weakness"], ["hospitalised", "Hospitalised"]];
+  const vis = VIS.slice(1).filter(([v]) => sy.some(r => r.visit === v)), vcol = [css("--seq1"), css("--seq2"), css("--seq3"), css("--seq4")];
+  draw("chSymptoms", barOpt(keys.map(k => k[1]), vis.map(([v, l], i) => { const S = sy.filter(r => r.visit === v), c = sum(S, "contacts");
+    return { name: l, data: keys.map(([k]) => pct(sum(S, k), c)), itemStyle: { color: vcol[i % 4] } }; }), { percent: true }));
+  const hg = F("hb_grades", false), g0 = ["Normal", "Mild (grade 1)", "Moderate (grade 2)", "Severe (grade 3-4)"], g3 = ["10 g/dL or more", "8 to 9.9 g/dL", "Below 8 g/dL", "No Day 3 Hb"];
+  table("tbHbGrade", [{ label: "Day 0 grade" }, ...g3.map(g => ({ label: g, num: 1 })), { label: "Total", num: 1 }],
+    g0.map(a => { const o = { "Day 0 grade": a }; g3.forEach(b => o[b] = sum(hg.filter(r => r.d0 === a && r.d3 === b))); o.Total = sum(hg.filter(r => r.d0 === a)); return o; }).filter(o => o.Total > 0));
+  const op = F("ev_open", false).filter(r => r.src === "cem"), oages = ["Updated in last 7 days", "8-14 days ago", "Over 14 days ago"];
+  draw("chOpen", barOpt(oages, [{ name: "Not serious", data: oages.map(a => sum(op.filter(r => r.age === a && !r.serious))), itemStyle: { color: css("--warning") } },
+    { name: "Serious", data: oages.map(a => sum(op.filter(r => r.age === a && r.serious))), itemStyle: { color: css("--critical") } }], { stack: true, horizontal: true }));
+  timelyTable("tbTimely", F("ev_timely", false).filter(r => r.src === "cem"));
+  // Subgroups recomputed from the safety cube
+  const groups = [["Age group", "age", ["Under 5", "5-14", "15 and over"]], ["Sex", "sex", ["female", "male"]], ["Baseline Hb (anaemia grade)", "hbg", g0.concat(["No Day 0 Hb"])],
+    ["G6PD status", "g6", ["Normal", "Deficient", "Unknown / not tested", "Not recorded"]]];
+  const out = [];
+  groups.forEach(([gname, key, levels]) => levels.forEach((lv, i) => { const S = sf.filter(r => r[key] === lv), nn = sum(S, "n"); if (!nn) return;
+    const hp = sum(S, "hb_pairs");
+    out.push({ "Subgroup": i === 0 || !out.length || out[out.length - 1]._g !== gname ? gname : "", _g: gname, "Level": lv === "female" ? "Female" : lv === "male" ? "Male" : lv, "Participants": nn,
+      "Any AE (95% CI)": propTxt(sum(S, "ae"), nn), "Serious AE": propTxt(sum(S, "sae"), nn), "Rate per 1,000 person-days": pois(sum(S, "ae"), sum(S, "pdays")),
+      "Mean Hb change": hp ? (sum(S, "hb_sum") / hp).toFixed(2) : "–", "Hb fall of 2+ (95% CI)": hp ? propTxt(sum(S, "hb_drop"), hp) : "–", "Signs of haemolysis": propTxt(sum(S, "haem"), nn) }); }));
+  out.forEach((r, i) => { if (i && out[i - 1]._g === r._g) r["Subgroup"] = ""; });
+  table("tbSafetySub", [{ label: "Subgroup" }, { label: "Level" }, { label: "Participants", num: 1 }, { label: "Any AE (95% CI)", num: 1 }, { label: "Serious AE", num: 1 },
+    { label: "Rate per 1,000 person-days", num: 1 }, { label: "Mean Hb change", num: 1 }, { label: "Hb fall of 2+ (95% CI)", num: 1 }, { label: "Signs of haemolysis", num: 1 }], out);
+}
+// Chi-square quantile via Wilson-Hilferty with Newton refinement (for exact Poisson intervals)
+function chi2inv(p, k) { if (k <= 0) return 0; const z = Math.SQRT2 * erfinv(2 * p - 1); let x = k * Math.pow(1 - 2 / (9 * k) + z * Math.sqrt(2 / (9 * k)), 3); return Math.max(x, 0); }
+function erfinv(x) { const a = 0.147, l = Math.log(1 - x * x), t = 2 / (Math.PI * a) + l / 2; return Math.sign(x) * Math.sqrt(Math.sqrt(t * t - l / a) - t); }
+function timelyTable(id, T) {
+  table(id, [{ label: "Type" }, { label: "Events", num: 1 }, { label: "On time", num: 1, chip: [95, 80], fmt: fmtP }, { label: "Late", num: 1 }],
+    [[true, "Serious (7 days)"], [false, "Other (28 days)"]].map(([s, l]) => { const X = T.filter(r => !!r.serious === s); return { "Type": l, "Events": sum(X), "On time": pct(sum(X.filter(r => r.on_time)), sum(X)), "Late": sum(X.filter(r => !r.on_time)) }; }).filter(r => r.Events > 0));
 }
 
-/* ---------- DATA QUALITY ---------- */
-function renderQuality() {
-  const dq = F("dq"), lk = F("linkage"), vr = rows(D.versions);
-  kpis("kpiQuality", [
-    { k: "Critical issues", v: fmtN(sum(dq.filter(r => r.severity === "Critical"), "n")), d: "fix first" },
-    { k: "Major issues", v: fmtN(sum(dq.filter(r => r.severity === "Major"), "n")) },
-    { k: "Minor issues", v: fmtN(sum(dq.filter(r => r.severity === "Minor"), "n")) },
-    { k: "Visits linked to a registration", v: fmtP(pct(sum(lk, "matched"), sum(lk, "visits"))), d: `${fmtN(sum(lk, "visits"))} CEM visits` },
-    { k: "Visits with a manual baseline", v: fmtP(pct(sum(lk, "manual"), sum(lk, "visits"))), d: "baseline not found automatically" },
-    { k: "Form versions in use", v: fmtN(new Set(vr.map(r => r.form + r.version)).size), d: "1 per form is ideal" } ]);
-  const checks = [...groupSum(dq, "check", "n")].sort((a, b) => b[1] - a[1]).map(x => x[0]);
-  const sevs = [["Critical", css("--critical")], ["Major", css("--serious")], ["Minor", css("--warning")]];
-  const iOpt = checks.length ? barOpt(checks, sevs.map(([s, c]) => ({ name: s, itemStyle: { color: c }, data: checks.map(ch => sum(dq.filter(r => r.check === ch && r.severity === s), "n") || null) })), { horizontal: true, stack: true }) : null;
-  if (iOpt) iOpt.yAxis.axisLabel.width = 330;
-  draw("chIssues", iOpt);
-  const sw = F("subs_week", true), weeks = [...new Set(sw.map(r => r.w))].sort(), b = base(), forms = ["Form 1 Registration", "Form 2 CEM follow-up", "Form 3 ADR/SAE"], cs = [css("--s1"), css("--s2"), css("--s3")];
-  draw("chSubs", weeks.length ? { textStyle: b.textStyle, grid: b.grid, legend: b.legend, tooltip: Object.assign({}, b.tooltip, { trigger: "axis" }),
-    xAxis: ax({ type: "category", boundaryGap: false, data: weeks.map(w => new Date(w + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" })), splitLine: { show: false } }),
-    yAxis: ax({ type: "value", minInterval: 1 }),
-    series: forms.map((f, i) => ({ name: f, type: "line", symbolSize: 8, lineStyle: { width: 2, color: cs[i] }, itemStyle: { color: cs[i], borderColor: css("--surface"), borderWidth: 2 },
-      label: { show: i === 2, position: "top", fontSize: 10, color: css("--ink-2") }, data: weeks.map(w => sum(sw.filter(r => r.w === w && r.form === f), "n")) })) } : null);
-  table("tbVersions", [{ label: "Form" }, { label: "Version" }, { label: "Records", num: 1 }], vr.map(r => ({ "Form": r.form, "Version": r.version || "Not recorded", "Records": r.n })));
+/* ---------- SPONTANEOUS ---------- */
+function renderSpont() {
+  const ev = evSplit("spont"), n = sum(ev), th = F("spont", false), tl = F("ev_timely", false).filter(r => r.src === "spont");
+  kpis("kpiSpont", [
+    { k: "Events reported (Form 3)", v: fmtN(n), d: `${fmtN(D.meta.counts.spont_reports)} reports including updates (all sites, all dates)` },
+    { k: "Serious", v: fmtN(sum(ev.filter(r => r.serious))), d: `${fmtN(sum(ev.filter(r => r.death)))} died`, alarm: sum(ev.filter(r => r.serious)) > 0, alarmText: "Review with the safety team" },
+    { k: "Primaquine suspected", v: fmtP(pct(sum(ev.filter(r => r.sus_sldp)), n)) },
+    { k: "Resolved", v: fmtP(pct(sum(ev.filter(r => r.resolved)), n)), d: `${fmtN(sum(ev.filter(r => !r.resolved)))} still open` },
+    { k: "Reported on time", v: fmtP(pct(sum(tl.filter(r => r.on_time)), sum(tl))), d: "7 days serious, 28 days other", raw: pct(sum(tl.filter(r => r.on_time)), sum(tl)), t: [95, 80] }]);
+  const ws = weeksOf(ev), ints = ["Mild", "Moderate", "Severe", "Not recorded"].filter(i => ev.some(r => r.intensity === i));
+  draw("chSpWeek", barOpt(ws.map(wlab), ints.map(i => ({ name: i, data: ws.map(w => sum(ev.filter(r => r.w === w && r.intensity === i))), itemStyle: { color: INT()[i] } })), { stack: true }));
+  draw("chSpThrough", rankOpt(by(th, "through"), css("--s4")));
+  draw("chSpSigns", rankOpt(by(F("ev_signs", false).filter(r => r.src === "spont"), "sign"), css("--s2")));
+  draw("chSpOutcome", rankOpt(by(ev, "outcome"), css("--s3")));
+  timelyTable("tbSpTimely", tl);
+  const sel = selectedFacilities();
+  table("tbSpFac", [{ label: "Facility" }, { label: "Type" }, { label: "Events", num: 1 }, { label: "Serious", num: 1 }, { label: "Severe", num: 1 }, { label: "Open", num: 1 }],
+    FAC().filter(f => sel.has(f.code)).map(f => { const E = ev.filter(r => r.f === f.code); return { "Facility": f.label, "Type": f.cem_site ? "CEM site (not enrolled)" : "Non-CEM", "Events": sum(E),
+      "Serious": sum(E.filter(r => r.serious)), "Severe": sum(E.filter(r => r.intensity === "Severe")), "Open": sum(E.filter(r => !r.resolved)) }; }).filter(r => r.Events > 0), { sortable: true });
 }
 
 /* ---------- STATISTICAL ANALYSIS ---------- */
 function renderAnalysis() {
   const wrap = $("analysisWrap"); wrap.replaceChildren(); Object.keys(charts).filter(k => k.startsWith("an_")).forEach(k => { charts[k].dispose(); delete charts[k]; });
-  (D.analysis || []).forEach(a => {
-    const c = el("div", { class: "acard" }); c.appendChild(el("div", { class: "obj" }, a.objective)); c.appendChild(el("h3", {}, a.title)); c.appendChild(el("p", { class: "method" }, a.method));
-    if (!a.chart || !a.chart.type) a.chart = null;
-    if (a.status !== "ok") { c.appendChild(el("p", { class: "pending" }, "Not yet available. " + a.note)); wrap.appendChild(c); return; }
-    const g = el("div", { class: a.chart ? "agrid" : "" }), tw = el("div", { class: "twrap" }), t = el("table"), hr = el("tr");
-    a.table.columns.forEach((col, i) => hr.appendChild(el("th", { class: i && typeof a.table.rows[0]?.[i] === "number" ? "n" : "" }, col)));
-    const th = el("thead"); th.appendChild(hr); t.appendChild(th); const tb = el("tbody");
-    a.table.rows.forEach(r => { const tr = el("tr"); r.forEach(v => tr.appendChild(el("td", { class: typeof v === "number" ? "n" : "" }, v == null ? "–" : (typeof v === "number" ? fmtN(v) : v)))); tb.appendChild(tr); });
-    t.appendChild(tb); tw.appendChild(t); g.appendChild(tw);
-    let chartId = null; if (a.chart) { chartId = "an_" + a.id; const ch = el("div", { class: "chart", id: chartId }); if (a.chart.type === "forest") ch.style.height = Math.max(170, 60 + 42 * a.chart.points.length) + "px"; g.appendChild(ch); }
-    c.appendChild(g); c.appendChild(el("div", { class: "finding" }, a.finding)); wrap.appendChild(c);
-    if (chartId) draw(chartId, a.chart.type === "forest" ? forestOpt(a.chart) : kmOpt(a.chart));
+  const objs = uniq((D.analysis || []).map(a => a.objective));
+  $("objnav").replaceChildren(...objs.map(o => { const a = el("a", { href: "#obj-" + o.replace(/\W+/g, "") }, o); a.onclick = e => { e.preventDefault(); $("obj-" + o.replace(/\W+/g, "")).scrollIntoView({ behavior: "smooth" }); }; return a; }));
+  objs.forEach(o => {
+    wrap.appendChild(el("h2", { id: "obj-" + o.replace(/\W+/g, "") }, o));
+    (D.analysis || []).filter(a => a.objective === o).forEach(a => {
+      const c = el("div", { class: "acard" }); c.appendChild(el("div", { class: "obj" }, a.objective)); c.appendChild(el("h3", {}, a.title)); c.appendChild(el("p", { class: "method" }, a.method));
+      if (a.status !== "ok") { c.appendChild(el("p", { class: "pending" }, "Not yet available. " + a.note)); wrap.appendChild(c); return; }
+      const ch = a.chart && a.chart.type ? a.chart : null;
+      const g = el("div", { class: ch ? "agrid" : "" }), tw = el("div", { class: "twrap" }), t = el("table"), hr = el("tr");
+      const isNum = i => a.table.rows.length && a.table.rows.every(r => r[i] == null || typeof r[i] === "number");
+      a.table.columns.forEach((col, i) => hr.appendChild(el("th", { class: i && isNum(i) ? "n" : "" }, col)));
+      const th = el("thead"); th.appendChild(hr); t.appendChild(th); const tb = el("tbody");
+      a.table.rows.forEach(r => { const tr = el("tr"); r.forEach((v, i) => tr.appendChild(el("td", { class: i && isNum(i) ? "n" : "" }, v == null ? "–" : (typeof v === "number" ? fmtN(v) : v)))); tb.appendChild(tr); });
+      t.appendChild(tb); tw.appendChild(t); g.appendChild(tw);
+      let chartId = null; if (ch) { chartId = "an_" + a.id; const box = el("div", { class: "chart", id: chartId }); if (ch.type === "forest") box.style.height = Math.max(170, 60 + 40 * ch.points.length) + "px"; g.appendChild(box); }
+      c.appendChild(g); c.appendChild(el("div", { class: "finding" }, a.finding)); wrap.appendChild(c);
+      if (chartId) draw(chartId, ch.type === "forest" ? forestOpt(ch) : ch.type === "km" ? kmOpt(ch) : ch.type === "hist" ? histOpt(ch) : barOpt(ch.x, [{ name: ch.label, data: ch.y, itemStyle: { color: css("--s2"), borderRadius: [0, 4, 4, 0] } }], { horizontal: true, legend: false, labels: true }));
+    });
   });
 }
 function forestOpt(ch) {
-  const b = base(), P = ch.points, names = P.map(p => p.name), lo = Math.min(...P.map(p => p.lo), 1), hi = Math.max(...P.map(p => p.hi), 1);
-  return { textStyle: b.textStyle, grid: Object.assign({}, b.grid, { top: 10, bottom: 28 }),
+  const b = base(), P = ch.points; if (!P.length) return null; const log = ch.null === 1;
+  const lo = Math.min(...P.map(p => p.lo), ch.null), hi = Math.max(...P.map(p => p.hi), ch.null);
+  const xa = log ? { type: "log", min: Math.max(0.01, Math.pow(10, Math.floor(Math.log10(lo) * 2) / 2)), max: Math.pow(10, Math.ceil(Math.log10(hi) * 2) / 2), axisLabel: { formatter: v => +(+v).toPrecision(2) } }
+                 : { type: "value", min: Math.floor(lo * 2) / 2, max: Math.ceil(hi * 2) / 2 };
+  return { textStyle: b.textStyle, grid: Object.assign({}, b.grid, { top: 10, bottom: 30 }),
     tooltip: Object.assign({}, b.tooltip, { trigger: "item", formatter: p => { const q = P[p.dataIndex]; return `<b>${q.est.toFixed(2)}</b> (95% CI ${q.lo.toFixed(2)} to ${q.hi.toFixed(2)})<br>${q.name}`; } }),
-    xAxis: ax({ type: "log", min: Math.max(0.01, Math.pow(10, Math.floor(Math.log10(lo) * 2) / 2)), max: Math.pow(10, Math.ceil(Math.log10(hi) * 2) / 2), name: ch.label + " (log scale)", nameLocation: "middle", nameGap: 26, axisLabel: { color: css("--ink-3"), formatter: v => +v.toPrecision(2) } }),
-    yAxis: ax({ type: "category", data: names, inverse: true, splitLine: { show: false }, axisLabel: { color: css("--ink-2"), width: 190, overflow: "truncate" } }),
-    series: [{ type: "custom", renderItem: (params, api) => { const y = api.coord([1, api.value(0)])[1], x0 = api.coord([api.value(1), 0])[0], x1 = api.coord([api.value(2), 0])[0];
+    xAxis: ax(Object.assign(xa, { name: ch.label + (log ? " (log scale)" : ""), nameLocation: "middle", nameGap: 26 })),
+    yAxis: ax({ type: "category", data: P.map(p => p.name), inverse: true, splitLine: { show: false }, axisLabel: { color: css("--ink-2"), width: 200, overflow: "truncate" } }),
+    series: [{ type: "custom", renderItem: (params, api) => { const y = api.coord([ch.null, api.value(0)])[1], x0 = api.coord([api.value(1), 0])[0], x1 = api.coord([api.value(2), 0])[0];
         return { type: "line", shape: { x1: x0, y1: y, x2: x1, y2: y }, style: { stroke: css("--ink-2"), lineWidth: 2 } }; },
         data: P.map((p, i) => [i, p.lo, p.hi]), encode: { x: [1, 2], y: 0 }, tooltip: { show: false }, z: 1 },
       { type: "scatter", symbolSize: 11, data: P.map((p, i) => [p.est, i]), itemStyle: { color: css("--s1"), borderColor: css("--surface"), borderWidth: 2 }, z: 3,
         markLine: { silent: true, symbol: "none", lineStyle: { type: "dashed", color: css("--ink-3") }, label: { show: false }, data: [{ xAxis: ch.null }] } }] };
 }
 function kmOpt(ch) {
-  const b = base(), cols = [css("--s1"), css("--s2")];
-  const step = s => s.time.map((t, i) => [t, s.est[i] * 100]);
-  return { textStyle: b.textStyle, grid: Object.assign({}, b.grid, { bottom: 28 }), legend: b.legend,
+  const b = base(), c = css("--s1"), xs = [0].concat(ch.x), first = ch.label.startsWith("Retention") ? 100 : 0;
+  const pts = (arr) => { const v = ch.x.map((t, i) => [t, arr[i] == null ? ch.y[i] : arr[i]]); return [[0, first]].concat(v).concat([[28, v.length ? v[v.length - 1][1] : first]]); };
+  return { textStyle: b.textStyle, grid: Object.assign({}, b.grid, { bottom: 30, top: 14 }),
     tooltip: Object.assign({}, b.tooltip, { trigger: "axis", valueFormatter: v => v == null ? "–" : (+v).toFixed(1) + "%" }),
     xAxis: ax({ type: "value", min: 0, max: 28, interval: 7, name: "Days since Day 0", nameLocation: "middle", nameGap: 26 }),
-    yAxis: ax({ type: "value", min: 0, axisLabel: { formatter: "{value}%", color: css("--ink-3") } }),
-    series: ch.series.map((s, i) => ({ name: s.name, type: "line", step: "end", showSymbol: false, lineStyle: { width: 2, color: cols[i] }, itemStyle: { color: cols[i] },
-      data: step(s).concat([[28, s.est[s.est.length - 1] * 100]]) })) };
+    yAxis: ax({ type: "value", min: first ? Math.max(0, Math.floor(Math.min(100, ...ch.lo.filter(v => v != null)) / 10) * 10 - 10) : 0, max: first ? 100 : null, axisLabel: { formatter: "{value}%" } }),
+    series: [{ type: "custom", silent: true, tooltip: { show: false }, z: 1, data: [0],
+        renderItem: (params, api) => { const step = arr => { const out = []; arr.forEach((p, i) => { if (i) out.push([p[0], arr[i - 1][1]]); out.push(p); }); return out; };
+          const up = step(pts(ch.hi)), dn = step(pts(ch.lo)).reverse();
+          return { type: "polygon", shape: { points: up.concat(dn).map(p => api.coord(p)) }, style: { fill: c, opacity: .14 } }; } },
+      { name: ch.label, type: "line", step: "end", showSymbol: false, data: pts(ch.y), lineStyle: { width: 2.5, color: c }, itemStyle: { color: c }, z: 2 }] };
+}
+function histOpt(ch) {
+  const o = barOpt(ch.x.map(v => (+v).toFixed(2)), [{ name: ch.label, barCategoryGap: "6%", data: ch.y.map((y, i) => ({ value: y, itemStyle: { color: ch.ref != null && ch.x[i] + 0.25 <= ch.ref + 1e-9 ? css("--critical") : css("--s1") } })) }], { legend: false });
+  if (o) { o.xAxis.name = ch.xlab; o.xAxis.nameLocation = "middle"; o.xAxis.nameGap = 26; o.grid.bottom = 26; }
+  return o;
+}
+
+/* ---------- DATA QUALITY ---------- */
+function renderQuality() {
+  const dq = F("dq", false), sw = F("subs_week"), lg = F("entry_lag", false), cp = F("completeness", false), sev = ["Critical", "Major", "Minor"];
+  kpis("kpiQuality", [
+    { k: "Critical issues", v: fmtN(sum(dq.filter(r => r.severity === "Critical"))), alarm: sum(dq.filter(r => r.severity === "Critical")) > 0, alarmText: "Fix first" },
+    { k: "Major issues", v: fmtN(sum(dq.filter(r => r.severity === "Major"))) },
+    { k: "Minor issues", v: fmtN(sum(dq.filter(r => r.severity === "Minor"))) },
+    { k: "Entered the same day", v: fmtP(pct(sum(lg.filter(r => r.lag === "Same day")), sum(lg))), d: "Form 1 and Form 2", raw: pct(sum(lg.filter(r => r.lag === "Same day")), sum(lg)), t: [80, 60] },
+    { k: "Key fields complete", v: fmtP(pct(sum(cp) - sum(cp, "missing"), sum(cp))), raw: pct(sum(cp) - sum(cp, "missing"), sum(cp)), t: [98, 90] },
+    { k: "Training records excluded", v: fmtN(Object.values(D.meta.test_excluded || {}).reduce((s, v) => s + (+v || 0), 0)), d: "first name TEST, all forms" }]);
+  const checks = uniq(dq.map(r => r.form + "|" + r.check));
+  table("tbIssues", [{ label: "Form" }, { label: "Check", wrap: 1 }, { label: "Severity" }, { label: "Records", num: 1 }, { label: "Facilities affected", num: 1 }],
+    checks.map(k => { const [form, check] = k.split("|"), X = dq.filter(r => r.form === form && r.check === check); return { "Form": form, "Check": check, "Severity": X[0].severity, "Records": sum(X), "Facilities affected": uniq(X.map(r => r.f)).length }; })
+      .sort((a, b) => sev.indexOf(a.Severity) - sev.indexOf(b.Severity) || b.Records - a.Records));
+  const ws = weeksOf(sw), forms = ["Form 1", "Form 2", "Form 3"], fc = [css("--s1"), css("--s3"), css("--s2")];
+  draw("chSubs", barOpt(ws.map(wlab), forms.map((f, i) => ({ name: f, data: ws.map(w => sum(sw.filter(r => r.w === w && r.form === f))), itemStyle: { color: fc[i] } }))));
+  const lags = ["Same day", "1 day", "2-3 days", "4-7 days", "Over 7 days"], lc = [css("--good"), css("--seq2"), css("--warning"), css("--serious"), css("--critical")];
+  draw("chLag", barOpt(["Form 1", "Form 2"], lags.map((l, i) => ({ name: l, data: ["Form 1", "Form 2"].map(f => pct(sum(lg.filter(r => r.form === f && r.lag === l)), sum(lg.filter(r => r.form === f)))), itemStyle: { color: lc[i] } })), { stack: true, percent: true, horizontal: true, max: 100 }));
+  const fields = uniq(cp.map(r => r.form + "|" + r.field));
+  table("tbComplete", [{ label: "Form" }, { label: "Field" }, { label: "Records", num: 1 }, { label: "Missing", num: 1 }, { label: "Complete", num: 1, chip: [98, 90], fmt: fmtP }],
+    fields.map(k => { const [form, field] = k.split("|"), X = cp.filter(r => r.form === form && r.field === field); return { "Form": form, "Field": field, "Records": sum(X), "Missing": sum(X, "missing"), "Complete": pct(sum(X) - sum(X, "missing"), sum(X)) }; }));
+  table("tbVersions", [{ label: "Form" }, { label: "Version" }, { label: "Records", num: 1 }], rows(D.versions).map(r => ({ "Form": r.form, "Version": r.version || "Not recorded", "Records": r.n })));
+}
+
+/* ---------- PATIENT QUEUE (encrypted) ---------- */
+const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function unlockQueue(pw) {
+  const enc = await (await fetch("data/queue.enc.json?v=" + Date.now(), { cache: "no-store" })).json();
+  if (!enc.available) throw new Error(enc.note || "The queue is not published.");
+  const baseKey = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: b64(enc.salt), iterations: enc.iter, hash: "SHA-256" }, baseKey, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+  let plain; try { plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(enc.iv) }, key, b64(enc.data)); } catch (e) { throw new Error("That password is not correct."); }
+  const txt = enc.gzip ? await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"))).text() : new TextDecoder().decode(plain);
+  return JSON.parse(txt);
+}
+const QCAT = ["Overdue", "Due now", "Open adverse event", "No Day 0 CEM form", "Meets LTFU definition", "Upcoming (7 days)"];
+const qBase = c => c.replace(" (call back)", "");
+function queueRows() {
+  const sel = selectedFacilities(), labs = new Set(FAC().filter(f => sel.has(f.code)).map(f => f.label)), v = $("qVisit").value, s = $("qSearch").value.trim().toLowerCase();
+  return Q.rows.filter(r => (labs.has(r.facility) || (!r.facility && sel.has("unknown"))) && (v === "all" || r.visit === v)
+    && (!s || [r.name, r.patient_id, r.phone, r.alt_phone].some(x => x && String(x).toLowerCase().includes(s))));
+}
+function renderQueue() {
+  if (!Q) { $("qLocked").hidden = false; $("qOpen").hidden = true; return; }
+  $("qLocked").hidden = true; $("qOpen").hidden = false;
+  const R = queueRows();
+  $("qIntro").textContent = `Queue built ${Q.generated_at} for ${Q.today}${Q.is_demo ? " (demonstration data, invented names)" : ""}. ${fmtN(Q.rows.length)} entries in total; overdue contacts first, then those due today. Call-backs are contacts where an earlier call did not reach the participant.`;
+  const counts = new Map(); R.forEach(r => counts.set(qBase(r.category), (counts.get(qBase(r.category)) || 0) + 1));
+  const nAct = R.filter(r => qBase(r.category) !== "Upcoming (7 days)").length;
+  $("qChips").replaceChildren(...[["action", "Action needed now", nAct], ["all", "Everything", R.length]].concat(QCAT.map(c => [c, c, counts.get(c) || 0])).map(([k, l, n]) => {
+    const b = el("button", { class: "qchip", "aria-pressed": String(qFilter === k) }); b.appendChild(el("b", {}, fmtN(n))); b.append(l); b.onclick = () => { qFilter = k; renderQueue(); }; return b; }));
+  const show = R.filter(r => qFilter === "all" || (qFilter === "action" ? qBase(r.category) !== "Upcoming (7 days)" : qBase(r.category) === qFilter));
+  const tel = p => { if (!p) return "–"; const a = el("a", { href: "tel:" + p }); a.textContent = p; return a; };
+  const host = $("tbQueue");
+  if (!show.length) { host.replaceChildren(el("div", { class: "empty" }, "No one in this part of the queue for the selected sites.")); return; }
+  const cols = [["Category", r => r.category], ["Patient ID", r => r.patient_id], ["Name", r => r.name || "–"], ["Phone", r => tel(r.phone)], ["Alternative contact", r => r.alt_name ? `${r.alt_name}` : "–"],
+    ["Alt. phone", r => tel(r.alt_phone)], ["Facility", r => r.facility || "–"], ["Contact", r => r.visit], ["Mode", r => r.mode || "–"], ["Due", r => r.due || "–"], ["Window ends", r => r.window_end || "–"],
+    ["Days overdue", r => r.days_overdue ? String(r.days_overdue) : "–"], ["Failed calls", r => r.attempts ? String(r.attempts) : "–"], ["Next attempt", r => r.next_attempt || "–"], ["Flags", r => r.flags || ""]];
+  const t = el("table"), hr = el("tr"); cols.forEach(([l]) => hr.appendChild(el("th", { class: ["Days overdue", "Failed calls"].includes(l) ? "n" : "" }, l)));
+  const th = el("thead"); th.appendChild(hr); t.appendChild(th); const tb = el("tbody");
+  show.forEach(r => { const tr = el("tr"); cols.forEach(([l, f]) => { const td = el("td", { class: ["Days overdue", "Failed calls"].includes(l) ? "n" : "" }); const v = f(r);
+      if (l === "Category") { const cls = qBase(r.category) === "Overdue" ? "b" : ["Due now", "Open adverse event", "Meets LTFU definition", "No Day 0 CEM form"].includes(qBase(r.category)) ? "w" : "g"; td.appendChild(el("span", { class: "chip " + cls }, v)); }
+      else if (v instanceof Node) td.appendChild(v); else td.textContent = v; tr.appendChild(td); }); tb.appendChild(tr); });
+  t.appendChild(tb); host.replaceChildren(t);
+  $("qCsv").onclick = () => { const head = ["category", "patient_id", "name", "phone", "alt_name", "alt_phone", "facility", "district", "visit", "mode", "due", "window_end", "days_overdue", "attempts", "last_attempt", "next_attempt", "flags"];
+    const esc = v => v == null ? "" : `"${String(v).replace(/"/g, '""')}"`;
+    const blob = new Blob([[head.join(",")].concat(show.map(r => head.map(h => esc(r[h])).join(","))).join("\r\n")], { type: "text/csv" });
+    const a = el("a", { href: URL.createObjectURL(blob), download: `sldp_queue_${Q.today}.csv` }); document.body.appendChild(a); a.click(); a.remove(); };
+}
+function setupQueue() {
+  $("qVisit").replaceChildren(el("option", { value: "all" }, "All contacts"), ...VIS.map(([, l]) => el("option", { value: l }, l)));
+  $("qForm").onsubmit = async e => { e.preventDefault(); $("qErr").textContent = "Opening..."; try { Q = await unlockQueue($("qPw").value); $("qPw").value = ""; $("qErr").textContent = ""; renderQueue(); }
+    catch (err) { $("qErr").textContent = err.message; } };
+  $("qVisit").onchange = renderQueue; $("qSearch").oninput = renderQueue;
+  $("qLock").onclick = () => { Q = null; qFilter = "action"; renderQueue(); };
+  $("qPrint").onclick = () => window.print();
 }
 
 /* ---------- Render cycle ---------- */
-const RENDER = { overview: renderOverview, coverage: renderCoverage, followup: renderFollowup, safety: renderSafety, quality: renderQuality, analysis: renderAnalysis, methods: () => {} };
+const RENDER = { overview: renderOverview, enrolment: renderEnrolment, cascade: renderCascade, dosing: renderDosing, followup: renderFollowup, safety: renderSafety,
+  spont: renderSpont, analysis: renderAnalysis, quality: renderQuality, queue: renderQueue, methods: () => {} };
 let current = "overview";
 function renderCurrent() {
   const fs = selectedFacilities(); const n = [...fs].filter(x => x !== "unknown").length;
-  $("scope").textContent = current === "analysis" ? "Filters do not apply to the statistical analysis" : `${n} of ${D.facilities.code.length} facilities · ${$("fPeriod").selectedOptions[0].text.toLowerCase()}`;
-  $("filters").style.display = current === "methods" ? "none" : "";
-  RENDER[current](); requestAnimationFrame(() => Object.values(charts).forEach(c => c.resize()));
+  $("scope").textContent = current === "analysis" ? "Filters do not apply to the statistical analysis" : `${n} of ${D.facilities.code.length - 1} facilities · ${$("fPeriod").selectedOptions[0].text.toLowerCase()}`;
+  $("filters").style.display = ["methods", "analysis"].includes(current) ? "none" : "";
+  $("fPeriod").disabled = current === "queue";
+  try { RENDER[current](); } catch (e) { console.error(e); }
+  requestAnimationFrame(() => Object.values(charts).forEach(c => c.resize()));
 }
 function showTab(t) { current = t; document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
   document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("on", s.id === "t-" + t));
@@ -578,15 +915,16 @@ async function init() {
   try { const r = await fetch("data/dashboard.json?v=" + Date.now()); D = await r.json(); }
   catch (e) { document.querySelector("main").replaceChildren(el("div", { class: "empty" }, "The dashboard data could not be loaded. Please refresh the page.")); return; }
   const m = D.meta; $("demo").hidden = !m.is_demo;
+  const nt = Object.values(m.test_excluded || {}).reduce((s, v) => s + (+v || 0), 0);
   if (!m.is_demo && m.includes_test) { $("trainNote").hidden = false; $("trainNote").textContent = "Training records included. These figures contain TEST practice records; switch them off before the pilot goes live."; }
-  else if (!m.is_demo && m.test_patients_excluded > 0) { $("trainNote").hidden = false; $("trainNote").textContent = `${m.test_patients_excluded} training (TEST) patient${m.test_patients_excluded > 1 ? "s are" : " is"} excluded from these figures, together with their follow-up visits and ADR reports.`; }
-  $("meta").replaceChildren(...[["Data as of", m.pulled_at || m.generated_at], ["Dashboard updated", m.generated_at + " GMT"], ["Pilot start", m.pilot_start], ["Facilities", D.facilities.code.length]]
-    .map(([k, v]) => { const s = el("span"); s.append(k + ": "); s.appendChild(el("b", {}, v)); return s; }));
-  $("foot").textContent = "SLDP pilot, Greater Accra. Aggregate figures only; no personal identifiers are published. Data: KoboToolbox (Forms 1 to 3), refreshed automatically every 6 hours. Developed by Kingsley Amegah.";
-  const ds = $("fDistrict"); ds.appendChild(el("option", { value: "all" }, "All districts")); [...new Set(D.facilities.district)].sort().forEach(d => ds.appendChild(el("option", { value: d }, d)));
-  fillFacilitySelect();
-  ["fPeriod", "fFacility", "fSite"].forEach(id => $(id).onchange = renderCurrent);
-  $("fDistrict").onchange = () => { fillFacilitySelect(); renderCurrent(); };
+  else if (!m.is_demo && nt > 0) { $("trainNote").hidden = false; $("trainNote").textContent = `${nt} training (TEST) record${nt > 1 ? "s are" : " is"} excluded from these figures.`; }
+  $("meta").replaceChildren(...[["Data as of", m.pulled_at || m.generated_at], ["Dashboard updated", m.generated_at + " GMT"], ["Pilot start", m.pilot_start],
+    ["CEM participants", fmtN(m.counts.cohort)], ["Facilities", D.facilities.code.length - 1]].map(([k, v]) => { const s = el("span"); s.append(k + ": "); s.appendChild(el("b", {}, v)); return s; }));
+  $("foot").textContent = "SLDP pilot, Greater Accra. Public figures are aggregates; the patient queue is encrypted. Data: KoboToolbox (Forms 1 to 3), refreshed automatically every 6 hours. Developed by Kingsley Amegah.";
+  const ds = $("fDistrict"); ds.appendChild(el("option", { value: "all" }, "All districts")); uniq(D.facilities.district).filter(d => d !== "Unknown").sort().forEach(d => ds.appendChild(el("option", { value: d }, d)));
+  fillFacilitySelect(); setupQueue();
+  ["fPeriod", "fFacility"].forEach(id => $(id).onchange = renderCurrent);
+  ["fDistrict", "fSite"].forEach(id => $(id).onchange = () => { fillFacilitySelect(); renderCurrent(); });
   $("fReset").onclick = () => { ["fPeriod", "fDistrict", "fSite"].forEach(id => $(id).value = "all"); fillFacilitySelect(); $("fFacility").value = "all"; renderCurrent(); };
   $("themeBtn").onclick = () => { const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
     document.documentElement.dataset.theme = dark ? "light" : "dark"; try { localStorage.setItem("sldp_theme", document.documentElement.dataset.theme); } catch (e) {}
