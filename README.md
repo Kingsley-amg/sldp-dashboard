@@ -32,7 +32,7 @@ The patient queue is the one place with names and phone numbers. R writes it to 
 
 ## How it updates
 
-`.github/workflows/update-dashboard.yml` runs every 6 hours, on each push to `main`, and on demand:
+`.github/workflows/update-dashboard.yml` runs every hour, on each push to `main`, and on demand:
 
 1. `R/pipeline.R` downloads the three forms from the Kobo API, removes TEST records, then cleans, validates and links them (patients, CEM contacts, adverse events, Form 3 reports, the visit schedule).
 2. `R/analysis.R` runs the statistical analysis for the protocol objectives.

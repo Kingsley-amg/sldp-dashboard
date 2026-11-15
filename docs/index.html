@@ -313,7 +313,7 @@ footer{max-width:1400px;margin:0 auto;padding:0 32px 32px;font-size:12.5px;color
 <section class="tab" id="t-methods">
   <div class="grid">
     <div class="card c6"><h3>Data and updates</h3><dl class="defs">
-      <dt>Source</dt><dd>KoboToolbox web forms: Form 1 Patient Register, Form 2 CEM Form (Days 0, 3, 7, 14, 28 and unscheduled), Form 3 ADR/SAE Report for patients not enrolled in CEM. Data are pulled through the Kobo API every 6 hours by a GitHub Action, cleaned in R and published as aggregates.</dd>
+      <dt>Source</dt><dd>KoboToolbox web forms: Form 1 Patient Register, Form 2 CEM Form (Days 0, 3, 7, 14, 28 and unscheduled), Form 3 ADR/SAE Report for patients not enrolled in CEM. Data are pulled through the Kobo API every hour by a GitHub Action, cleaned in R and published as aggregates.</dd>
       <dt>Training records</dt><dd>Patients whose first name starts with TEST, and all their Form 2 and Form 3 records, are excluded.</dd>
       <dt>Privacy</dt><dd>The public page holds counts only: no names, phone numbers, Patient IDs or Event IDs. The build stops if an identifier pattern is found. The patient queue is encrypted with AES-256-GCM using a key derived from the queue password (PBKDF2-SHA256, 310,000 iterations) and can only be read with that password.</dd>
       <dt>Filters</dt><dd>Period filters use the week of registration (enrolment and cascade), the week of Day 0 (follow-up), the week of onset (events) and the week of the call (call outcomes). Weeks start on Monday.</dd>
@@ -920,7 +920,7 @@ async function init() {
   else if (!m.is_demo && nt > 0) { $("trainNote").hidden = false; $("trainNote").textContent = `${nt} training (TEST) record${nt > 1 ? "s are" : " is"} excluded from these figures.`; }
   $("meta").replaceChildren(...[["Data as of", m.pulled_at || m.generated_at], ["Dashboard updated", m.generated_at + " GMT"], ["Pilot start", m.pilot_start],
     ["CEM participants", fmtN(m.counts.cohort)], ["Facilities", D.facilities.code.length - 1]].map(([k, v]) => { const s = el("span"); s.append(k + ": "); s.appendChild(el("b", {}, v)); return s; }));
-  $("foot").textContent = "SLDP pilot, Greater Accra. Public figures are aggregates; the patient queue is encrypted. Data: KoboToolbox (Forms 1 to 3), refreshed automatically every 6 hours. Developed by Kingsley Amegah.";
+  $("foot").textContent = "SLDP pilot, Greater Accra. Public figures are aggregates; the patient queue is encrypted. Data: KoboToolbox (Forms 1 to 3), refreshed automatically every hour. Developed by Kingsley Amegah.";
   const ds = $("fDistrict"); ds.appendChild(el("option", { value: "all" }, "All districts")); uniq(D.facilities.district).filter(d => d !== "Unknown").sort().forEach(d => ds.appendChild(el("option", { value: d }, d)));
   fillFacilitySelect(); setupQueue();
   ["fPeriod", "fFacility"].forEach(id => $(id).onchange = renderCurrent);

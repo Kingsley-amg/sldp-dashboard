@@ -1,11 +1,11 @@
 # Pulls the SLDP Kobo forms, rebuilds the dashboard data and the encrypted
-# patient queue, and publishes docs/ to GitHub Pages. Runs every 6 hours, on
+# patient queue, and publishes docs/ to GitHub Pages. Runs every hour, on
 # every push to main, and on demand (Actions > Update SLDP dashboard > Run workflow).
 name: Update SLDP dashboard
 
 on:
   schedule:
-    - cron: "17 */6 * * *"        # 00:17, 06:17, 12:17, 18:17 Accra time (UTC)
+    - cron: "17 * * * *"          # every hour at about :17, Accra time (UTC); GitHub may start it a little late
   push:
     branches: [main]
   workflow_dispatch:
