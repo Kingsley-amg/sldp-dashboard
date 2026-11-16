@@ -280,7 +280,7 @@ EMPTY_EVENTS <- tibble(event_id = character(), source = character(), patient_id 
   signs = character(), first_record = as.Date(character()), n_records = integer(), n_updates = integer(), intensity = character(), serious = logical(),
   criteria = character(), outcome = character(), stopped = character(), stop_date = as.Date(character()), informed_date = as.Date(character()),
   last_record = as.Date(character()), sus_sldp = logical(), sus_act = logical(), sus_other = logical(), hospitalised = logical(), transfused = logical(),
-  death = logical(), report_lag = numeric(), report_target = numeric(), on_time = logical(), resolved = logical())
+  death = logical(), report_lag = numeric(), report_target = numeric(), on_time = logical(), resolved = logical(), reported = logical())
 summarise_events <- function(d, source) {
   if (is.null(d) || nrow(d) == 0) return(EMPTY_EVENTS)
   d |> arrange(event_id, record_date, submission_time) |> group_by(event_id) |>
@@ -298,7 +298,8 @@ summarise_events <- function(d, source) {
            death = has_code(criteria, "death") | outcome == "D",
            report_lag = as.numeric(coalesce(informed_date, first_record) - onset),
            report_target = if_else(serious, SERIOUS_REPORT_D, OTHER_REPORT_D), on_time = !is.na(report_lag) & report_lag <= report_target,
-           resolved = outcome %in% c("R1", "S", "D"))
+           resolved = outcome %in% c("R1", "S", "D"),
+           reported = !is.na(informed_date))   # CEM: focal person informed; Form 3: the report itself
 }
 cem_events <- summarise_events(if (nrow(cem_records)) cem_records |>
   transmute(event_id = ae_event_id, patient_id, facility, type = coalesce(ae_type_saved, "new"), onset, signs = ae_signs, record_date = visit_date,

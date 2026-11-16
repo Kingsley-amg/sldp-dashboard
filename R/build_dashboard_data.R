@@ -42,7 +42,7 @@ r <- reg |> mutate(f = known_fac(facility), w = wk(registration_date), age = coa
 reg_cube <- r |> mutate(el_ = eligible, pf_ = pf) |> group_by(f, w, age, sex) |>
   summarise(registered = n(), tested = sum(test_done %in% "yes"), pf = sum(pf_), eligible = sum(el_), act = sum(el_ & act_given),
             accepted = sum(el_ & act_given & pq_accepted %in% "yes"), given = sum(sldp_given), cem_offered = sum(sldp_given & cem_site),
-            enrolled = sum(cem_in), dose_ok = sum(dose_ok), dose_flag = sum(sldp_given & dose_flag %in% "yes"), dot = sum(sldp_given & dot %in% "yes"),
+            enrolled = sum(cem_in), dose_ok = sum(dose_ok), dose_flag = sum(sldp_given & dose_flag %in% "yes"), dot = sum(sldp_given & dot %in% "yes"), given_screened = sum(sldp_given & el_ & pf_),
             counselled = sum(sldp_given & counselled %in% "yes"), .groups = "drop")
 not_elig <- r |> filter(!eligible) |> count(f, w, reason = not_elig_reason, name = "n")
 refusal  <- r |> filter(pq_accepted %in% "no") |> select(f, w, pq_not_given_reasons) |> tidyr::separate_rows(pq_not_given_reasons, sep = " ") |>
@@ -96,7 +96,7 @@ if (nrow(ev_all) == 0) ev_all <- tibble(event_id = character(), source = charact
                                         report_lag = numeric(), on_time = logical(), last_record = as.Date(character()))
 ev_all <- ev_all |> mutate(f = known_fac(facility), w = wk(onset), src = if_else(source == "CEM (Form 2)", "cem", "spont"),
                            outcome = coalesce(lbl("cem", "outcome", outcome), outcome), intensity = stringr::str_to_sentence(intensity))
-ev_cube <- ev_all |> count(f, w, src, intensity, serious, outcome, sus_sldp, sus_act, resolved, hospitalised, death, name = "n")
+ev_cube <- ev_all |> count(f, w, src, intensity, serious, outcome, sus_sldp, sus_act, resolved, hospitalised, death, reported, on_time, name = "n")
 ev_signs <- ev_all |> select(f, src, serious, signs) |> tidyr::separate_rows(signs, sep = " ") |> filter(!is.na(signs), signs != "") |>
   count(f, src, serious, sign = coalesce(lbl("cem", "adr_sign", signs), signs), name = "n")
 ev_crit <- ev_all |> filter(serious) |> select(f, src, criteria) |> tidyr::separate_rows(criteria, sep = " ") |> filter(!is.na(criteria), criteria != "") |>
@@ -113,7 +113,8 @@ spont <- adr |> filter(report_type %in% "new") |>
 safety_cube <- cohort |> mutate(f = known_fac(facility), age = coalesce(chr(age_group), "Not recorded"), hbg = coalesce(chr(hb_grade_d0), "No Day 0 Hb"),
                                 g6 = coalesce(chr(g6pd_grp), "Not recorded"), sex = coalesce(sex, "unknown")) |>
   group_by(f, age, sex, hbg, g6) |>
-  summarise(n = n(), pdays = round(sum(person_days), 1), ae = sum(any_ae), sae = sum(any_serious), haem = sum(haemolysis),
+  summarise(n = n(), d0 = sum(coalesce(d0_done, FALSE) & consent_d0 %in% "yes"), d3_fbc = sum(!is.na(hb_d3)),
+            pdays = round(sum(person_days), 1), ae = sum(any_ae), sae = sum(any_serious), haem = sum(haemolysis),
             hb_pairs = sum(!is.na(hb_change)), hb_drop = sum(hb_drop), hb_sum = round(sum(hb_change, na.rm = TRUE), 2), hosp = sum(hosp_any), .groups = "drop")
 # Inadvertent exposure: pregnancy found after primaquine (CEM, Form 2) and Form 3 exposure reports
 exposure_cube <- bind_rows(

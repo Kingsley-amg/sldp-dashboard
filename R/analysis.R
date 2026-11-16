@@ -322,5 +322,54 @@ A$q_d3par <- safely("q_d3par", OBJ6, "Day 3 parasitology (repeat test)", "Share 
        "Positivity on Day 3 reflects ACT response; persistent positivity should be followed up clinically.")
 })
 
+
+# ============================================================================
+# PILOT TARGETS: protocol performance indicators
+# ============================================================================
+OBJ0 <- "Pilot targets"
+A$t_targets <- safely("t_targets", OBJ0, "Pilot performance indicators against their targets",
+  "Whole pilot, all sites. Proportions with exact binomial 95% CI. For targets of the form \"above X%\" a one-sided exact binomial test asks whether the indicator is above the target (\"below X%\": below it). For 100% targets the number of exceptions is shown instead of a test.",
+  "Runs once patients have been registered.", {
+  need(nrow(reg) > 0)
+  pfc <- sum(reg$pf); giv <- sum(reg$sldp_given); eli <- sum(reg$eligible)
+  scr <- sum(reg$sldp_given & reg$eligible & reg$pf); dot <- sum(reg$sldp_given & reg$dot %in% "yes")
+  fol <- cohort |> filter(person_days > 0); sae <- sum(fol$any_serious)
+  ev <- bind_rows(cem_events, adr_events); rep_n <- sum(ev$reported); ont <- sum(ev$on_time)
+  d0 <- sum(coalesce(cohort$d0_done, FALSE) & cohort$consent_d0 %in% "yes"); d3 <- sum(!is.na(cohort$hb_d3))
+  cons_y <- sum(reg$cem_in & reg$patient_id %in% d0v$patient_id[d0v$consent_d0 %in% "yes"])
+  cons_n <- sum(reg$cem_in & reg$patient_id %in% d0v$patient_id[d0v$consent_d0 %in% c("yes", "no")])
+  months <- max(0, min(ENROL_MONTHS, as.numeric(TODAY - PILOT_START) / 30.4375)); expct <- round(ENROL_TOTAL * months / ENROL_MONTHS)
+  st <- function(v, ok, warn) ifelse(is.na(v), "No data", ifelse(ok(v), "Met", ifelse(warn(v), "Close", "Not met")))
+  row <- function(ind, target, x, n, dir, thr, note = "") {
+    if (n == 0) return(tibble(Indicator = ind, Target = target, Achieved = "No data", `n / N` = "0 / 0", `95% CI` = "", Status = "No data", Test = note))
+    v <- 100 * x / n; ci <- prop_ci(x, n)
+    test <- if (dir == "gt") pp(binom.test(x, n, thr / 100, alternative = "greater")$p.value)
+            else if (dir == "lt") pp(binom.test(x, n, thr / 100, alternative = "less")$p.value)
+            else paste0(n - x, " exception(s)")
+    status <- if (dir == "gt") st(v, function(z) z >= thr, function(z) z >= thr - 10) else if (dir == "lt") st(v, function(z) z < thr, function(z) z < 2 * thr)
+              else st(v, function(z) z >= 100, function(z) z >= 95)
+    tibble(Indicator = ind, Target = target, Achieved = sprintf("%.1f%%", v), `n / N` = paste(format(x, big.mark = ","), "/", format(n, big.mark = ",")),
+           `95% CI` = fmt_ci(ci[2], ci[3], 1), Status = status, Test = paste0(test, if (nzchar(note)) paste0(" · ", note) else ""))
+  }
+  cnt <- function(ind, x) tibble(Indicator = ind, Target = "1,500", Achieved = sprintf("%.1f%%", 100 * x / ENROL_TOTAL),
+    `n / N` = paste(format(x, big.mark = ","), "/ 1,500"), `95% CI` = "", Status = ifelse(expct == 0, "No data", ifelse(x >= 0.9 * expct, "On track", ifelse(x >= 0.7 * expct, "Close", "Behind"))),
+    Test = paste0(format(expct, big.mark = ","), " expected by today"))
+  t <- bind_rows(
+    row("SLDP coverage (of P. falciparum cases)", "above 80%", giv, pfc, "gt", 80, sprintf("of eligible: %.1f%%", if (eli) 100 * giv / eli else NA)),
+    row("Serious adverse event rate (CEM participants)", "below 0.5%", sae, nrow(fol), "lt", 0.5),
+    row("Pre-screening compliance (given SLDP after a passed screen)", "100%", scr, giv, "eq", 100),
+    row("DOT compliance (dose observed)", "above 95%", dot, giv, "gt", 95),
+    row("ADR reporting (adverse events reported)", "100%", rep_n, nrow(ev), "eq", 100, sprintf("on time: %d of %d", ont, nrow(ev))),
+    cnt("CEM enrolment: Day 0 completed", d0),
+    cnt("CEM enrolment: Day 3 FBC done", d3),
+    row("Consenting (enrolled patients who consented at Day 0)", "100%", cons_y, cons_n, "eq", 100))
+  met <- t$Indicator[t$Status %in% c("Met", "On track")]; miss <- t$Indicator[t$Status %in% c("Not met", "Behind")]
+  done("t_targets", OBJ0, "Pilot performance indicators against their targets",
+       sprintf("Pilot start %s; %.1f of %d enrolment months elapsed.", format(PILOT_START), months, ENROL_MONTHS), t,
+       paste0(length(met), " of ", nrow(t), " indicators met or on track.", if (length(miss)) paste0(" Not met or behind: ", paste(miss, collapse = "; "), ".") else ""))
+})
+
+# Pilot targets first
+A <- c(A["t_targets"], A[setdiff(names(A), "t_targets")])
 analysis_out <- unname(A)
 log_msg("analysis: ", sum(vapply(analysis_out, function(x) x$status == "ok", logical(1))), " of ", length(analysis_out), " analyses ran")

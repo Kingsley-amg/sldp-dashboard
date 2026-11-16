@@ -162,6 +162,7 @@ footer{max-width:1400px;margin:0 auto;padding:0 32px 32px;font-size:12.5px;color
 <!-- ============ OVERVIEW ============ -->
 <section class="tab on" id="t-overview">
   <p class="intro">Where the pilot stands today for the selected sites and period: enrolment, treatment, follow-up, safety and the work waiting for the CEM teams. Registration and safety counts follow the period filter; follow-up status always describes today's position.</p>
+  <div class="card" style="margin-bottom:16px"><h3>Pilot targets</h3><p class="note">Performance indicators set for the pilot. Registration-based indicators follow the period filter; CEM indicators cover all dates. Thresholds are in Methods.</p><div class="twrap" id="tbPilotTargets"></div></div>
   <div class="kpis" id="kpiOverview"></div>
   <div class="grid">
     <div class="card c5"><h3>Needs attention</h3><p class="note">Generated from today's data</p><ul class="alerts" id="alerts"></ul></div>
@@ -327,6 +328,7 @@ footer{max-width:1400px;margin:0 auto;padding:0 32px 32px;font-size:12.5px;color
       <dt>Inadvertent exposure</dt><dd>Primaquine given to someone who should not have had it (pregnant, breastfeeding a baby under 1, a baby under 1, or allergic). Reported in Form 3, or in Form 2 when a CEM participant finds out she is pregnant.</dd>
       <dt>Lost to follow-up</dt><dd>Two unsuccessful scheduled follow-ups (protocol). The queue lists participants who meet this definition so the team can confirm and record the disposition.</dd>
       <dt>Reporting deadlines</dt><dd>FDA: serious ADRs within 7 days of onset, other ADRs within 28 days.</dd>
+      <dt>Pilot targets</dt><dd>SLDP coverage above 80% of P. falciparum cases; serious adverse event rate below 0.5% of CEM participants; pre-screening compliance 100% (everyone given SLDP passed the eligibility screen); DOT compliance above 95%; ADR reporting 100% (every adverse event reported to the CEM focal person or through Form 3); CEM enrolment of 1,500 with a completed Day 0 visit and 1,500 with a Day 3 full blood count; consenting 100% (patients enrolled for CEM in Form 1 who consented at Day 0). Status: Met; Close (within 10 percentage points of an "above" target, 95% or more of a 100% target, or under twice a "below" target); Not met. Enrolment: On track at 90% or more of the number expected by today, Close at 70% or more, otherwise Behind.</dd>
       <dt>Scorecard thresholds</dt><dd>Green on target, amber below target, red needs action. Coverage of eligible patients: 90% / 75%. Follow-up completion: 90% / 75%. Enrolment against expected: 90% / 70%. Reporting on time: 95% / 80%.</dd>
     </dl></div>
     <div class="card c12"><h3>Statistical methods</h3><dl class="defs">
@@ -458,6 +460,7 @@ const monthsElapsed = () => { const s = new Date(D.meta.pilot_start + "T00:00:00
 
 /* ---------- OVERVIEW ---------- */
 function renderOverview() {
+  renderPilotTargets();
   const rg = F("reg"), fu = F("fu", false), ev = F("ev").filter(r => r.src === "cem"), sp = F("ev").filter(r => r.src === "spont"), dq = F("dq", false), qc = F("queue", false), sf = F("safety", false);
   const reg = sum(rg, "registered"), elig = sum(rg, "eligible"), given = sum(rg, "given"), enr = sum(rg, "enrolled");
   const due = fu.filter(r => ["Completed", "Due now", "Overdue", "Missed"].includes(r.status)), done = sum(due.filter(r => r.status === "Completed"));
@@ -518,6 +521,35 @@ function renderOverview() {
   table("tbScore", [{ label: "Facility" }, { label: "District" }, { label: "Type" }, { label: "Registered", num: 1 }, { label: "Eligible", num: 1 }, { label: "Given SLDP", num: 1 },
     { label: "Coverage", num: 1, chip: [90, 75], fmt: fmtP }, { label: "Enrolled (all dates)", num: 1 }, { label: "vs expected", num: 1, chip: [90, 70], fmt: fmtP },
     { label: "Follow-up done", num: 1, chip: [90, 75], fmt: fmtP }, { label: "Overdue", num: 1 }, { label: "AE %", num: 1, fmt: fmtP }, { label: "Issues", num: 1 }], data, { sortable: true });
+}
+function renderPilotTargets() {
+  const rg = F("reg"), sf = F("safety", false), ev = F("ev"), cs = F("consent", false), sel = selectedFacilities();
+  const facs = FAC().filter(f => sel.has(f.code) && f.cem_site), tgt = facs.reduce((a, f) => a + (f.target_total || 0), 0);
+  const expct = Math.round(facs.reduce((a, f) => a + Math.min(f.target_total || 0, (f.target_month || 0) * monthsElapsed()), 0));
+  const S = (k, t = rg) => sum(t, k);
+  const prop = (ind, target, x, n, dir, thr, note) => {
+    const v = n ? 100 * x / n : null, ci = n ? exactCI(x, n) : null;
+    let status = "No data";
+    if (v != null) status = dir === "gt" ? (v >= thr ? "Met" : v >= thr - 10 ? "Close" : "Not met") : dir === "lt" ? (v < thr ? "Met" : v < 2 * thr ? "Close" : "Not met") : (v >= 100 ? "Met" : v >= 95 ? "Close" : "Not met");
+    return { "Indicator": ind, "Target": target, "Achieved": v == null ? "–" : v.toFixed(1) + "%", "n / N": `${fmtN(x)} / ${fmtN(n)}`,
+      "95% CI": ci ? `${ci[0].toFixed(1)} to ${ci[1].toFixed(1)}` : "–", "Status": status, "Notes": note || (dir === "eq" && n ? `${fmtN(n - x)} exception(s)` : "") };
+  };
+  const cnt = (ind, x) => ({ "Indicator": ind, "Target": fmtN(tgt), "Achieved": tgt ? (100 * x / tgt).toFixed(1) + "%" : "–", "n / N": `${fmtN(x)} / ${fmtN(tgt)}`, "95% CI": "",
+    "Status": !expct ? "No data" : x >= 0.9 * expct ? "On track" : x >= 0.7 * expct ? "Close" : "Behind", "Notes": `${fmtN(expct)} expected by today` });
+  const cy = S("n", cs.filter(r => r.consent === "Consented")), cn = S("n", cs.filter(r => r.consent === "Declined at Day 0"));
+  const rows = [
+    prop("SLDP coverage (of P. falciparum cases)", "above 80%", S("given"), S("pf"), "gt", 80, `of eligible: ${fmtP(pct(S("given"), S("eligible")))}`),
+    prop("Serious adverse event rate (CEM participants)", "below 0.5%", S("sae", sf), S("n", sf), "lt", 0.5, "all dates"),
+    prop("Pre-screening compliance", "100%", S("given_screened"), S("given"), "eq", 100),
+    prop("DOT compliance", "above 95%", S("dot"), S("given"), "gt", 95),
+    prop("ADR reporting", "100%", S("n", ev.filter(r => r.reported)), S("n", ev), "eq", 100, `reported on time: ${fmtN(S("n", ev.filter(r => r.on_time)))} of ${fmtN(S("n", ev))}`),
+    cnt("CEM enrolment: Day 0 completed", S("d0", sf)),
+    cnt("CEM enrolment: Day 3 FBC done", S("d3_fbc", sf)),
+    prop("Consenting (enrolled for CEM)", "100%", cy, cy + cn, "eq", 100, `${fmtN(sum(cs.filter(r => r.consent === "No Day 0 form yet")))} without a Day 0 form yet`)];
+  const cls = { "Met": "g", "On track": "g", "Close": "w", "Not met": "b", "Behind": "b", "No data": "na" };
+  table("tbPilotTargets", [{ label: "Indicator" }, { label: "Target", num: 1 }, { label: "Achieved", num: 1 }, { label: "n / N", num: 1 }, { label: "95% CI", num: 1 },
+    { label: "Status", fmt: v => v }, { label: "Notes" }], rows);
+  document.querySelectorAll("#tbPilotTargets tbody tr").forEach((tr, i) => { const td = tr.children[5]; const v = rows[i].Status; td.replaceChildren(el("span", { class: "chip " + cls[v] }, v)); });
 }
 function enrolCumOpt() {
   const ed = F("enrol_day", false); if (!ed.length) return null; const b = base();
