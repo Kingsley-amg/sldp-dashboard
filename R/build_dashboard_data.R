@@ -93,7 +93,7 @@ ev_all <- bind_rows(cem_events, adr_events)
 if (nrow(ev_all) == 0) ev_all <- tibble(event_id = character(), source = character(), patient_id = character(), facility = character(), onset = as.Date(character()),
                                         signs = character(), intensity = character(), serious = logical(), outcome = character(), criteria = character(),
                                         sus_sldp = logical(), sus_act = logical(), resolved = logical(), hospitalised = logical(), death = logical(),
-                                        report_lag = numeric(), on_time = logical(), last_record = as.Date(character()))
+                                        report_lag = numeric(), on_time = logical(), reported = logical(), last_record = as.Date(character()))
 ev_all <- ev_all |> mutate(f = known_fac(facility), w = wk(onset), src = if_else(source == "CEM (Form 2)", "cem", "spont"),
                            outcome = coalesce(lbl("cem", "outcome", outcome), outcome), intensity = stringr::str_to_sentence(intensity))
 ev_cube <- ev_all |> count(f, w, src, intensity, serious, outcome, sus_sldp, sus_act, resolved, hospitalised, death, reported, on_time, name = "n")

@@ -220,10 +220,11 @@ for i in range(a.n):
 
 # One patient registered twice under a new ID (data-quality check: possible duplicate registration)
 import copy
-src = next(r for r in reg_recs if r.get(P1["phone"]) and r.get(P1["registration_date"]) and r[P1["registration_date"]] < (TODAY - timedelta(days=6)).isoformat())
-dup = copy.deepcopy(src); dup[P1["patient_id"]] = pid()
-dup[P1["registration_date"]] = (date.fromisoformat(src[P1["registration_date"]]) + timedelta(days=5)).isoformat()
-reg_recs.append(meta(dup, at(date.fromisoformat(dup[P1["registration_date"]])), "v2026111601"))
+src = next((r for r in reg_recs if r.get(P1["phone"]) and r.get(P1["registration_date"]) and r[P1["registration_date"]] < (TODAY - timedelta(days=6)).isoformat()), None)
+if src:
+    dup = copy.deepcopy(src); dup[P1["patient_id"]] = pid()
+    dup[P1["registration_date"]] = (date.fromisoformat(src[P1["registration_date"]]) + timedelta(days=5)).isoformat()
+    reg_recs.append(meta(dup, at(date.fromisoformat(dup[P1["registration_date"]])), "v2026111601"))
 
 # ---------------------------------------------------------------- FORM 2: CEM contacts and adverse events
 SCHED = [("d0", 0), ("d3", 3), ("d7", 7), ("d14", 14), ("d28", 28)]
@@ -424,7 +425,8 @@ for p in patients:
             c_outcome="R1", s_serious="yes" if sev else "no", f_name="Reporter " + R.choice(LAST), f_report_date=ud.isoformat())
         adr_recs.append(meta(upd, at(ud), "v2026111401"))
 
-for p in R.sample([p for p in patients if p["given"] and not p["enrolled"] and p["sex"] == "female" and p["years"] >= 15], 3):
+_cand = [p for p in patients if p["given"] and not p["enrolled"] and p["sex"] == "female" and p["years"] >= 15]
+for p in R.sample(_cand, min(3, len(_cand))):
     rec = {}; fd = min(p["pq_date"] + timedelta(days=R.randint(3, 12)), TODAY)
     put(rec, P3, patient_id=p["pid"], reg_found="yes", r_cem_enrolled="no", report_type="exposure", report_uuid=hexid(32), new_event_id=f"{p['pid']}-E{hexid(6).upper()}",
         facility=p["fac"], district=p["district"], sex="female", reported_through="non_cem", cem_block="no", x_types="pregnant", x_preg_weeks=R.randint(5, 14),
